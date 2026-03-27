@@ -27,7 +27,7 @@ class TablePress_Edit_View extends TablePress_View {
 	 * @since 2.0.0
 	 * @var array
 	 */
-	protected $wp_pointers = array( 'tp20_edit_context_menu' );
+	protected $wp_pointers = array( 'tp20_edit_context_menu', 'tp21_edit_screen_options' );
 
 	/**
 	 * Set up the view with data and do things that are specific for this view.
@@ -63,9 +63,12 @@ class TablePress_Edit_View extends TablePress_View {
 		$this->admin_page->enqueue_style( 'jspreadsheet' );
 		$this->admin_page->enqueue_style( 'jsuites', array( 'tablepress-jspreadsheet' ) );
 		$this->admin_page->enqueue_style( 'edit', array( 'tablepress-jspreadsheet', 'tablepress-jsuites' ) );
+		if ( tb_tp_fs()->is_free_plan() ) {
+			$this->admin_page->enqueue_style( 'edit-features', array( 'tablepress-edit' ) );
+		}
 		$this->admin_page->enqueue_script( 'jspreadsheet' );
 		$this->admin_page->enqueue_script( 'jsuites', array( 'tablepress-jspreadsheet' ) );
-		$this->admin_page->enqueue_script( 'edit', array( 'tablepress-jspreadsheet', 'tablepress-jsuites', 'jquery' ) );
+		$this->admin_page->enqueue_script( 'edit', array( 'tablepress-jspreadsheet', 'tablepress-jsuites', 'jquery-core' ) );
 
 		$this->add_text_box( 'head', array( $this, 'textbox_head' ), 'normal' );
 		$this->add_text_box( 'buttons-1', array( $this, 'textbox_buttons' ), 'normal' );
@@ -73,10 +76,12 @@ class TablePress_Edit_View extends TablePress_View {
 		$this->add_meta_box( 'table-data', __( 'Table Content', 'tablepress' ), array( $this, 'postbox_table_data' ), 'normal' );
 		$this->add_meta_box( 'table-manipulation', __( 'Table Manipulation', 'tablepress' ), array( $this, 'postbox_table_manipulation' ), 'normal' );
 		$this->add_meta_box( 'table-options', __( 'Table Options', 'tablepress' ), array( $this, 'postbox_table_options' ), 'normal' );
-		$this->add_meta_box( 'datatables-features', __( 'Table Features for Visitors', 'tablepress' ), array( $this, 'postbox_datatables_features' ), 'normal' );
+		$this->add_meta_box( 'datatables-features', __( 'Table Features for Site Visitors', 'tablepress' ), array( $this, 'postbox_datatables_features' ), 'normal' );
 		$this->add_text_box( 'hidden-containers', array( $this, 'textbox_hidden_containers' ), 'additional' );
 		$this->add_text_box( 'buttons-2', array( $this, 'textbox_buttons' ), 'additional' );
 		$this->add_text_box( 'other-actions', array( $this, 'textbox_other_actions' ), 'submit' );
+
+		add_filter( 'screen_settings', array( $this, 'add_screen_options_output' ), 10, 2 );
 	}
 
 	/**
@@ -93,9 +98,38 @@ class TablePress_Edit_View extends TablePress_View {
 	}
 
 	/**
-	 * Render the current view.
+	 * Adds custom screen options to the screen.
 	 *
-	 * In comparison to the parent class method, this contains handling for the no-js case and removes unnecessary HTML elements.
+	 * @since 2.1.0
+	 *
+	 * @param string    $screen_settings Screen settings.
+	 * @param WP_Screen $screen          WP_Screen object.
+	 * @return string Extended Screen settings.
+	 */
+	public function add_screen_options_output( $screen_settings, $screen ) {
+		$screen_settings = '<fieldset id="tablepress-screen-options" class="screen-options">';
+		$screen_settings .= '<legend>' . __( 'Table editor settings', 'tablepress' ) . '</legend>';
+		$screen_settings .= '<p>' . __( 'Adjust the default size of the table cells in the table editor below.', 'tablepress' ) . ' ' . __( 'Cells with many lines of text will expand to their full height when they are edited.', 'tablepress' ) . '</p>';
+		$screen_settings .= '<p><em>' . __( 'Please note: These settings only influence the table editor view on this screen, but not the table that the site visitor sees!', 'tablepress' ) . '</em></p>';
+		$screen_settings .= '<div>';
+		$screen_settings .= '<label for="table_editor_column_width">' . __( 'Default column width:', 'tablepress' ) . '</label> ';
+		$input = '<input type="number" id="table_editor_column_width" class="small-text" value="' . esc_attr( TablePress::$model_options->get( 'table_editor_column_width' ) ) . '" min="30" max="9999" />';
+		$screen_settings .= sprintf( __( '%s pixels', 'tablepress' ), $input );
+		$screen_settings .= '</div>';
+		$screen_settings .= '<div style="margin-top: 6px;">';
+		$screen_settings .= '<label for="table_editor_line_clamp">' . __( 'Maximum visible lines of text:', 'tablepress' ) . '</label> ';
+		$input = '<input type="number" id="table_editor_line_clamp" class="tiny-text" value="' . esc_attr( TablePress::$model_options->get( 'table_editor_line_clamp' ) ) . '" min="0" max="999" />';
+		$screen_settings .= sprintf( __( '%s lines', 'tablepress' ), $input );
+		$screen_settings .= '</div>';
+		$screen_settings .= '</fieldset>';
+		return $screen_settings;
+	}
+
+
+	/**
+	 * Renders the current view.
+	 *
+	 * In comparison to the parent class method, this contains handling for the no-js case and adjusts the HTML code structure.
 	 *
 	 * @since 2.0.0
 	 */
@@ -104,11 +138,16 @@ class TablePress_Edit_View extends TablePress_View {
 		<div id="tablepress-page" class="wrap">
 		<form>
 		<?php
-		$this->print_nav_tab_menu();
+			$this->print_nav_tab_menu();
+		?>
+		<div id="tablepress-body">
+		<hr class="wp-header-end" />
+		<?php
 		// Print all header messages.
 		foreach ( $this->header_messages as $message ) {
 			echo $message;
 		}
+
 		$this->do_text_boxes( 'header' );
 		?>
 		<div id="poststuff" class="hide-if-no-js">
@@ -122,12 +161,16 @@ class TablePress_Edit_View extends TablePress_View {
 					$this->do_meta_boxes( 'additional' );
 
 					$this->do_text_boxes( 'submit' );
+
+					$this->do_text_boxes( 'side' );
+					$this->do_meta_boxes( 'side' );
 					?>
 				</div>
 			</div>
 			<br class="clear" />
 		</div>
 		</form>
+		</div>
 		</div>
 		<?php
 	}
@@ -158,7 +201,10 @@ class TablePress_Edit_View extends TablePress_View {
 	<tr class="bottom-border">
 		<th class="column-1" scope="row"><label for="table-id"><?php _e( 'Table ID', 'tablepress' ); ?>:</label></th>
 		<td class="column-2">
-			<input type="text" id="table-id" value="<?php echo esc_attr( $data['table']['id'] ); ?>" title="<?php esc_attr_e( 'The Table ID can only consist of letters, numbers, hyphens (-), and underscores (_).', 'tablepress' ); ?>" pattern="[A-Za-z1-9-_]|[A-Za-z0-9-_]{2,}" required <?php echo ( ! current_user_can( 'tablepress_edit_table_id', $data['table']['id'] ) ) ? 'readonly ' : ''; ?>/>
+			<div id="table-id-shortcode-wrapper">
+				<input type="text" id="table-id" value="<?php echo esc_attr( $data['table']['id'] ); ?>" title="<?php esc_attr_e( 'The Table ID can only consist of letters, numbers, hyphens (-), and underscores (_).', 'tablepress' ); ?>" pattern="[A-Za-z1-9-_]|[A-Za-z0-9-_]{2,}" required <?php echo ( ! current_user_can( 'tablepress_edit_table_id', $data['table']['id'] ) ) ? 'readonly ' : ''; ?>/>
+				<div><label for="table-information-shortcode"><?php _e( 'Shortcode', 'tablepress' ); ?>:</label> <input type="text" id="table-information-shortcode" value="<?php echo esc_attr( '[' . TablePress::$shortcode . " id={$data['table']['id']} /]" ); ?>" readonly /></div>
+			</div>
 		</td>
 	</tr>
 	<tr class="top-border">
@@ -175,6 +221,37 @@ class TablePress_Edit_View extends TablePress_View {
 	</tr>
 </table>
 		<?php
+		if ( tb_tp_fs()->is_free_plan() ) :
+			?>
+			<div class="postbox premium-features">
+				<div>
+					<div>
+						<div class="postbox-header">
+							<h2><span class="dashicons dashicons-heart"></span> <?php _e( 'TablePress has more to offer!', 'tablepress' ); ?></h2>
+						</div>
+						<div class="inside">
+						<?php
+							TablePress::init_modules();
+							$random_module_slug = array_rand( TablePress::$modules );
+							$feature_module = TablePress::$modules[ $random_module_slug ];
+							$module_url = esc_url( "https://tablepress.org/modules/{$random_module_slug}/" );
+
+							echo '<strong>' . __( 'Supercharge your tables with exceptional features:', 'tablepress' ) . '</strong>';
+							echo '<h3><a href="' . $module_url . '">' . $feature_module['name'] . '</a></h3>';
+							echo '<span>' . $feature_module['description'] . ' <a href="' . $module_url . '">' . __( 'Read more!', 'tablepress' ) . '</a></span>';
+						?>
+						</div>
+					</div>
+					<div class="buttons">
+						<a href="<?php echo 'https://tablepress.org/premium/'; ?>" class="tablepress-button">
+							<span><?php _e( 'Compare the TablePress premium versions', 'tablepress' ); ?></span>
+							<span class="dashicons dashicons-arrow-right-alt"></span>
+						</a>
+					</div>
+				</div>
+			</div>
+			<?php
+		endif;
 	}
 
 	/**
@@ -186,30 +263,32 @@ class TablePress_Edit_View extends TablePress_View {
 	 * @param array $box  Information about the meta box.
 	 */
 	public function postbox_table_data( array $data, array $box ) {
-		echo <<<JS
-<script>
-// Ensure the global `tp` object exists.
-window.tp = window.tp || {};\n\n
-JS;
+		echo "<script>\n";
+		echo "window.tp = window.tp || {};\n";
 
 		echo "tp.nonces = {};\n";
 		echo "tp.nonces.edit_table = '" . wp_create_nonce( TablePress::nonce( $this->action, $data['table']['id'] ) ) . "';\n";
 		echo "tp.nonces.preview_table = '" . wp_create_nonce( TablePress::nonce( 'preview_table', $data['table']['id'] ) ) . "';\n";
+		echo "tp.nonces.screen_options = '" . wp_create_nonce( TablePress::nonce( 'screen_options' ) ) . "';\n";
 		echo "\n";
 
 		echo "tp.table = {};\n";
+		echo "tp.table.shortcode = '" . esc_js( TablePress::$shortcode ) . "';\n";
 		echo "tp.table.id = '{$data['table']['id']}';\n";
 		echo "tp.table.new_id = '{$data['table']['id']}';\n";
 		// JSON-encode array items separately to save some PHP memory.
 		foreach ( array( 'data', 'options', 'visibility' ) as $item ) {
-			$json = wp_json_encode( $data['table'][ $item ], TABLEPRESS_JSON_OPTIONS );
-			// Print them inside a `JSON.parse()` call in JS for speed gains, with necessary escaping of `</script>`, `'`, and `\`.
-			$json = str_replace( array( '</script>', '\\', "'" ), array( '<\/script>', '\\\\', "\'" ), $json );
-			printf( 'tp.table.%1$s = JSON.parse( \'%2$s\' );' . "\n", $item, $json );
+			$json = $this->admin_page->convert_to_json_parse_output( $data['table'][ $item ] );
+			printf( 'tp.table.%1$s = %2$s;' . "\n", $item, $json );
 		}
+
+		echo "tp.screen_options = {};\n";
+		echo 'tp.screen_options.table_editor_column_width = ' . absint( TablePress::$model_options->get( 'table_editor_column_width' ) ) . ";\n";
 		echo "</script>\n";
 
-		echo '<div id="table-editor"></div>';
+		$css_variables = '--table-editor-line-clamp:' . absint( TablePress::$model_options->get( 'table_editor_line_clamp' ) ) . ';';
+		$css_variables = esc_attr( $css_variables );
+		echo "<div id=\"table-editor\" style=\"{$css_variables}\"></div>";
 	}
 
 	/**
@@ -226,9 +305,9 @@ JS;
 	<tr class="bottom-border">
 		<td class="column-1">
 			<?php _e( 'Selected cells', 'tablepress' ); ?>:&nbsp;
-			<input type="button" class="button" id="button-insert-link" value="<?php esc_attr_e( 'Insert Link', 'tablepress' ); ?>" />
-			<input type="button" class="button" id="button-insert-image" value="<?php esc_attr_e( 'Insert Image', 'tablepress' ); ?>" />
-			<input type="button" class="button" id="button-advanced-editor" value="<?php esc_attr_e( 'Advanced Editor', 'tablepress' ); ?>" />
+			<input type="button" class="button" id="button-insert-link" value="<?php esc_attr_e( 'Insert Link', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$sL', 'keyboard shortcut for Insert Link', 'tablepress' ) ); ?>" />
+			<input type="button" class="button" id="button-insert-image" value="<?php esc_attr_e( 'Insert Image', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$sI', 'keyboard shortcut for Insert Image', 'tablepress' ) ); ?>" />
+			<input type="button" class="button" id="button-advanced-editor" value="<?php esc_attr_e( 'Advanced Editor', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$sE', 'keyboard shortcut for Advanced Editor', 'tablepress' ) ); ?>" />
 		</td>
 		<td class="column-2">
 			<?php _e( 'Selected cells', 'tablepress' ); ?>:&nbsp;
@@ -253,13 +332,13 @@ JS;
 	<tr>
 		<td class="column-1">
 			<?php _e( 'Selected rows', 'tablepress' ); ?>:&nbsp;
-			<input type="button" class="button button-move" data-type="rows" data-direction="up" value="<?php esc_attr_e( 'Move up', 'tablepress' ); ?>" />
-			<input type="button" class="button button-move" data-type="rows" data-direction="down" value="<?php esc_attr_e( 'Move down', 'tablepress' ); ?>" />
+			<input type="button" class="button button-move" data-type="rows" data-direction="up" value="<?php esc_attr_e( 'Move up', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$s⇧↑', 'keyboard shortcut for Move up', 'tablepress' ) ); ?>" />
+			<input type="button" class="button button-move" data-type="rows" data-direction="down" value="<?php esc_attr_e( 'Move down', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$s⇧↓', 'keyboard shortcut for Move down', 'tablepress' ) ); ?>" />
 		</td>
 		<td class="column-2">
 			<?php _e( 'Selected columns', 'tablepress' ); ?>:&nbsp;
-			<input type="button" class="button button-move" data-type="columns" data-direction="left" value="<?php esc_attr_e( 'Move left', 'tablepress' ); ?>" />
-			<input type="button" class="button button-move" data-type="columns" data-direction="right" value="<?php esc_attr_e( 'Move right', 'tablepress' ); ?>" />
+			<input type="button" class="button button-move" data-type="columns" data-direction="left" value="<?php esc_attr_e( 'Move left', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$s⇧←', 'keyboard shortcut for Move left', 'tablepress' ) ); ?>" />
+			<input type="button" class="button button-move" data-type="columns" data-direction="right" value="<?php esc_attr_e( 'Move right', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$s⇧→', 'keyboard shortcut for Move right', 'tablepress' ) ); ?>" />
 		</td>
 	</tr>
 	<tr class="bottom-border">
@@ -299,12 +378,12 @@ JS;
 	public function textbox_buttons( array $data, array $box ) {
 		$preview_url = TablePress::url( array( 'action' => 'preview_table', 'item' => $data['table']['id'], 'return' => 'edit', 'return_item' => $data['table']['id'] ), true, 'admin-post.php' );
 
-		echo '<p class="submit">';
+		echo '<p id="' . $box['id'] . '-submit" class="submit">';
 		if ( current_user_can( 'tablepress_preview_table', $data['table']['id'] ) ) {
-			echo '<a href="' . $preview_url . '" class="button button-large button-show-preview" target="_blank">' . __( 'Preview', 'tablepress' ) . '</a>';
+			echo '<a href="' . $preview_url . '" class="button button-large button-show-preview" target="_blank" data-shortcut="' . esc_attr( _x( '%1$sP', 'keyboard shortcut for Preview', 'tablepress' ) ) . '">' . __( 'Preview', 'tablepress' ) . '</a>';
 		}
 		?>
-			<input type="button" class="button button-primary button-large button-save-changes" value="<?php esc_attr_e( 'Save Changes', 'tablepress' ); ?>" />
+			<input type="button" class="button button-primary button-large button-save-changes" value="<?php esc_attr_e( 'Save Changes', 'tablepress' ); ?>" data-shortcut="<?php echo esc_attr( _x( '%1$sS', 'keyboard shortcut for Save Changes', 'tablepress' ) ); ?>" />
 		<?php
 		echo '</p>';
 	}
@@ -380,7 +459,7 @@ JS;
 		. ' ' . __( 'Combining consecutive cells within the same column is called &#8220;rowspanning&#8221;.', 'tablepress' ) . '</p>';
 		echo '<p>' . sprintf( __( 'To combine adjacent cells, select the desired cells and click the “%s” button or use the context menu.', 'tablepress' ), __( 'Combine/Merge', 'tablepress' ) )
 		. ' ' . __( 'The corresponding keywords, <code>#colspan#</code> and <code>#rowspan#</code>, will then be added for you.', 'tablepress' ) . '</p>';
-		echo '<p><strong>' . __( 'Be aware that the table features for visitors, like sorting, filtering, and pagination, will not work on tables which have combined cells.', 'tablepress' ) . '</strong></p>';
+		echo '<p><strong>' . __( 'Be aware that the Table Features for Site Visitors, like sorting, filtering, and pagination, will not work on tables which have combined cells.', 'tablepress' ) . '</strong></p>';
 		?>
 </div>
 		<?php
@@ -435,14 +514,14 @@ JS;
 	</tr>
 	<tr class="top-border">
 		<th class="column-1" scope="row"><?php _e( 'Extra CSS Classes', 'tablepress' ); ?>:</th>
-		<td class="column-2"><label for="option-extra_css_classes"><input type="text" id="option-extra_css_classes" name="extra_css_classes" class="large-text" title="<?php esc_attr_e( 'This field can only contain letters, numbers, spaces, hyphens (-), underscores (_), and colons (:).', 'tablepress' ); ?>" pattern="[A-Za-z0-9- _:]*" /><p class="description"><?php echo __( 'Additional CSS classes for styling purposes can be entered here.', 'tablepress' ) . ' ' . sprintf( __( 'This is NOT the place to enter <a href="%s">Custom CSS</a> code!', 'tablepress' ), TablePress::url( array( 'action' => 'options' ) ) ); ?></p></label></td>
+		<td class="column-2"><label for="option-extra_css_classes"><input type="text" id="option-extra_css_classes" name="extra_css_classes" class="large-text code" title="<?php esc_attr_e( 'This field can only contain letters, numbers, spaces, hyphens (-), underscores (_), and colons (:).', 'tablepress' ); ?>" pattern="[A-Za-z0-9- _:]*" /><p class="description"><?php echo __( 'Additional CSS classes for styling purposes can be entered here.', 'tablepress' ) . ' ' . sprintf( __( 'This is NOT the place to enter <a href="%s">Custom CSS</a> code!', 'tablepress' ), TablePress::url( array( 'action' => 'options' ) ) ); ?></p></label></td>
 	</tr>
 </table>
 		<?php
 	}
 
 	/**
-	 * Print the content of the "Table Features for Visitors" post meta box.
+	 * Print the content of the "Table Features for Site Visitors" post meta box.
 	 *
 	 * @since 1.0.0
 	 *
@@ -455,7 +534,7 @@ JS;
 <table class="tablepress-postbox-table fixed">
 	<tr class="bottom-border">
 		<th class="column-1" scope="row"><?php _e( 'Enable Visitor Features', 'tablepress' ); ?>:</th>
-		<td class="column-2"><label for="option-use_datatables"><input type="checkbox" id="option-use_datatables" name="use_datatables" /> <?php _e( 'Use the following functions for visitors with this table:', 'tablepress' ); ?></label></td>
+		<td class="column-2"><label for="option-use_datatables"><input type="checkbox" id="option-use_datatables" name="use_datatables" /> <?php _e( 'Offer the following functions for site visitors with this table:', 'tablepress' ); ?></label></td>
 	</tr>
 	<tr class="top-border">
 		<th class="column-1" scope="row"><?php _e( 'Sorting', 'tablepress' ); ?>:</th>
@@ -468,7 +547,7 @@ JS;
 	<tr>
 		<th class="column-1" scope="row" style="vertical-align: top;"><?php _e( 'Pagination', 'tablepress' ); ?>:</th>
 		<td class="column-2"><label for="option-datatables_paginate"><input type="checkbox" id="option-datatables_paginate" name="datatables_paginate" /> <?php _e( 'Enable pagination of the table (viewing only a certain number of rows at a time) by the visitor.', 'tablepress' ); ?></label><br />
-		<label for="option-datatables_paginate_entries" class="checkbox-left"><?php printf( __( 'Show %s rows per page.', 'tablepress' ), '<input type="number" id="option-datatables_paginate_entries" name="datatables_paginate_entries" min="1" max="99999" required />' ); ?></label></td>
+		<label for="option-datatables_paginate_entries" class="checkbox-left">&nbsp;<?php printf( __( 'Show %s rows per page.', 'tablepress' ), '<input type="number" id="option-datatables_paginate_entries" class="small-text" name="datatables_paginate_entries" min="1" max="99999" required />' ); ?></label></td>
 	</tr>
 	<tr>
 		<th class="column-1" scope="row"><?php _e( 'Pagination Length Change', 'tablepress' ); ?>:</th>
@@ -488,37 +567,12 @@ JS;
 			?>
 	<tr class="top-border">
 		<th class="column-1" scope="row"><?php _e( 'Custom Commands', 'tablepress' ); ?>:</th>
-		<td class="column-2"><label for="option-datatables_custom_commands"><textarea id="option-datatables_custom_commands" name="datatables_custom_commands" class="large-text" rows="1"></textarea><p class="description"><?php echo sprintf( __( 'Additional parameters from the <a href="%s">DataTables documentation</a> to be added to the JS call.', 'tablepress' ), 'https://www.datatables.net/' ) . ' ' . __( 'For advanced use only.', 'tablepress' ); ?></p></label></td>
+		<td class="column-2"><label for="option-datatables_custom_commands"><textarea id="option-datatables_custom_commands" name="datatables_custom_commands" class="large-text code" rows="1"></textarea><p class="description"><?php echo sprintf( __( 'Additional parameters from the <a href="%s">DataTables documentation</a> to be added to the JS call.', 'tablepress' ), 'https://www.datatables.net/' ) . ' ' . __( 'For advanced use only.', 'tablepress' ); ?></p></label></td>
 	</tr>
 			<?php
 		} // if
 		?>
 </table>
-		<?php
-	}
-
-	/**
-	 * Print a notification about JavaScript not being activated in the browser.
-	 *
-	 * @since 2.0.0
-	 *
-	 * @param array $data Data for this screen.
-	 * @param array $box  Information about the text box.
-	 */
-	public function textbox_no_javascript( array $data, array $box ) {
-		?>
-		<div class="notice notice-error notice-alt notice-large hide-if-js">
-			<h3><em>
-				<?php _e( 'Attention: Unfortunately, there is a problem!', 'tablepress' ); ?>
-			</em></h3>
-			<p style="font-size:14px">
-				<strong><?php _e( 'The table editor requires JavaScript. Please enable JavaScript in your browser settings.', 'tablepress' ); ?></strong><br />
-				<?php _e( 'For help, please follow <a href="https://www.enable-javascript.com/">the instructions on how to enable JavaScript in your browser</a>.', 'tablepress' ); ?>
-			</p>
-			<p>
-				<?php echo '<a href="' . TablePress::url( array( 'action' => 'list' ) ) . '">' . __( 'Back to the List of Tables', 'tablepress' ) . '</a>'; ?>
-			</p>
-		</div>
 		<?php
 	}
 
@@ -569,12 +623,17 @@ JS;
 		echo '<p>';
 		_e( 'To edit the content or modify the structure of this table, use the input fields and buttons below.', 'tablepress' );
 		echo ' ';
-		printf( __( 'To insert a table into a post or page, add a “%1$s” block in the block editor and select the desired table.', 'tablepress' ), __( 'TablePress table', 'tablepress' ) );
+		// Show the instructions string depending on whether the Block Editor is used on the site or not.
+		if ( $data['site_uses_block_editor'] ) {
+			printf( __( 'To insert a table into a post or page, add a “%1$s” block in the block editor and select the desired table.', 'tablepress' ), __( 'TablePress table', 'tablepress' ) );
+		} else {
+			_e( 'To insert a table into a post or page, paste its Shortcode at the desired place in the editor.', 'tablepress' );
+		}
 		echo '</p>';
 	}
 
 	/**
-	 * Set the content for the WP feature pointer about the drag and drop and sort on the "Edit" screen.
+	 * Sets the content for the WP feature pointer about the drag and drop and sort on the "Edit" screen.
 	 *
 	 * @since 2.0.0
 	 */
@@ -588,6 +647,26 @@ JS;
 			array(
 				'content'  => $content,
 				'position' => array( 'edge' => 'bottom', 'align' => 'center' ),
+			)
+		);
+	}
+
+	/**
+	 * Sets the content for the WP feature pointer about the screen options for changing the cell size.
+	 *
+	 * @since 2.1.0
+	 */
+	public function wp_pointer_tp21_edit_screen_options() {
+		$content  = '<h3>' . __( 'TablePress feature: Column width and row height of the table editor', 'tablepress' ) . '</h3>';
+		$content .= '<p>' . __( 'Did you know?', 'tablepress' ) . ' ' . sprintf( __( 'You can change the default cell size for the table editor on this “Edit” screen in the “%s”.', 'tablepress' ), __( 'Screen Options', 'default' ) ) . '</p>';
+
+		$this->admin_page->print_wp_pointer_js(
+			'tp21_edit_screen_options',
+			'#screen-options-link-wrap',
+			array(
+				'content'      => $content,
+				'position'     => array( 'edge' => 'top', 'align' => 'right' ),
+				'pointerClass' => 'wp-pointer pointer-tp21_edit_screen_options',
 			)
 		);
 	}

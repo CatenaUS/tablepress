@@ -74,10 +74,11 @@ class TablePress_Import {
 	 * @return array|WP_Error List of imported tables on success, WP_Error on failure.
 	 */
 	public function run( array $import_config ) {
-		// Unzip can use a lot of memory and execution time, but not this much hopefully.
-		/** This filter is documented in the WordPress file wp-admin/admin.php */
+		// Unziping can use a lot of memory and execution time, but not this much hopefully.
 		wp_raise_memory_limit( 'admin' );
-		set_time_limit( 300 );
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
 
 		$this->import_config = $import_config;
 
@@ -134,10 +135,17 @@ class TablePress_Import {
 					return new WP_Error( 'table_import_url_host_blocked', '', $this->import_config['url'] );
 				}
 
+				/**
+				 * Load WP file functions to be sure that `download_url()` exists, in particular during Cron requests.
+				 */
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+
 				// Download URL to local file.
 				$location = download_url( $this->import_config['url'] );
 				if ( is_wp_error( $location ) ) {
-					return new WP_Error( 'table_import_url_download_failed', '', $this->import_config['url'] );
+					$error = new WP_Error( 'table_import_url_download_failed', '', $this->import_config['url'] );
+					$error->merge_from( $location );
+					return $error;
 				}
 
 				$import_files[] = array(
@@ -251,7 +259,7 @@ class TablePress_Import {
 		// Actually remove files that are marked as removed (null).
 		$import_files = array_filter(
 			$import_files,
-			function( $file ) {
+			static function( $file ) {
 				return ! is_null( $file );
 			}
 		);
@@ -361,7 +369,7 @@ class TablePress_Import {
 	 *
 	 * @return array List of table names and IDs.
 	 */
-	function _get_list_of_table_names() {
+	protected function _get_list_of_table_names() {
 		$existing_tables = array();
 		// Load all table IDs and names for a comparison with the file name.
 		$table_ids = TablePress::$model_table->load_all( false );
@@ -401,6 +409,7 @@ class TablePress_Import {
 
 		// Use the legacy import class, if the requirements for PHPSpreadsheet are not fulfilled.
 		$phpspreadsheet_requirements_fulfilled = PHP_VERSION_ID >= 70200
+			&& extension_loaded( 'mbstring' )
 			&& class_exists( 'ZipArchive', false )
 			&& class_exists( 'DOMDocument', false )
 			&& function_exists( 'simplexml_load_string' )
@@ -446,7 +455,7 @@ class TablePress_Import {
 			$valid_import_files = 0;
 			foreach ( $import_files as $file ) {
 				if ( ! isset( $file['error'] ) || ! is_wp_error( $file['error'] ) ) {
-					$valid_import_files++;
+					++$valid_import_files;
 					if ( $valid_import_files > 1 ) {
 						$this->import_config['existing_table'] = '';
 						break;
@@ -641,8 +650,8 @@ class TablePress_Import {
 		// Full JSON format table can contain a table ID, try to keep that, by later changing the imported table ID to this.
 		$table_id_in_import = isset( $imported_table['id'] ) ? $imported_table['id'] : '';
 
-		// To be able to replace or append to a table, editing that table must be allowed.
-		if ( in_array( $import_type, array( 'replace', 'append' ), true ) && ! current_user_can( 'tablepress_edit_table', $existing_table_id ) ) {
+		// To be able to replace or append to a table, the user must be able to edit the table, or it must be a Cron request (e.g. via the Automatic Periodic Table Import module).
+		if ( in_array( $import_type, array( 'replace', 'append' ), true ) && ! ( current_user_can( 'tablepress_edit_table', $existing_table_id ) || wp_doing_cron() ) ) {
 			return new WP_Error( 'table_import_replace_append_capability_check_failed', '', $existing_table_id );
 		}
 
@@ -658,9 +667,9 @@ class TablePress_Import {
 				// Load table, without table data, but with options and visibility settings.
 				$existing_table = TablePress::$model_table->load( $existing_table_id, false, true );
 				if ( is_wp_error( $existing_table ) ) {
-					// Add an error code to the existing WP_Error.
-					$existing_table->add( 'table_import_replace_table_load', '', $existing_table_id );
-					return $existing_table;
+					$error = new WP_Error( 'table_import_replace_table_load', '', $existing_table_id );
+					$error->merge_from( $existing_table );
+					return $error;
 				}
 				// Don't change name and description when a table is replaced.
 				$imported_table['name'] = $existing_table['name'];
@@ -674,9 +683,9 @@ class TablePress_Import {
 				// Load table, with table data, options, and visibility settings.
 				$existing_table = TablePress::$model_table->load( $existing_table_id, true, true );
 				if ( is_wp_error( $existing_table ) ) {
-					// Add an error code to the existing WP_Error.
-					$existing_table->add( 'table_import_append_table_load', '', $existing_table_id );
-					return $existing_table;
+					$error = new WP_Error( 'table_import_append_table_load', '', $existing_table_id );
+					$error->merge_from( $existing_table );
+					return $error;
 				}
 				if ( isset( $existing_table['is_corrupted'] ) && $existing_table['is_corrupted'] ) {
 					return new WP_Error( 'table_import_append_table_load_corrupted', '', $existing_table_id );
@@ -711,9 +720,9 @@ class TablePress_Import {
 		// Check if the new table data is valid and consistent.
 		$table = TablePress::$model_table->prepare_table( $existing_table, $imported_table, false );
 		if ( is_wp_error( $table ) ) {
-			// Add an error code to the existing WP_Error.
-			$table->add( 'table_import_table_prepare', '', $imported_table['id'] );
-			return $table;
+			$error = new WP_Error( 'table_import_table_prepare', '', $imported_table['id'] );
+			$error->merge_from( $table );
+			return $error;
 		}
 
 		// DataTables Custom Commands can only be edit by trusted users.
@@ -731,9 +740,9 @@ class TablePress_Import {
 		}
 
 		if ( is_wp_error( $table_id ) ) {
-			// Add an error code to the existing WP_Error.
-			$table_id->add( 'table_import_table_save_or_add', '', $table['id'] );
-			return $table_id;
+			$error = new WP_Error( 'table_import_table_save_or_add', '', $table['id'] );
+			$error->merge_from( $table_id );
+			return $error;
 		}
 
 		// Try to use ID from imported file (e.g. in full JSON format table).

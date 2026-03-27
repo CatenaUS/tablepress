@@ -166,8 +166,11 @@ class TablePress_Render {
 	protected function _evaluate_table_data() {
 		$orig_table = $this->table;
 
-		$formula_evaluator = TablePress::load_class( 'TablePress_Evaluate', 'class-evaluate.php', 'classes' );
-		$this->table['data'] = $formula_evaluator->evaluate_table_data( $this->table['data'], $this->table['id'] );
+		if ( $this->render_options['evaluate_formulas'] ) {
+			$formula_evaluator = TablePress::load_class( 'TablePress_Evaluate', 'class-evaluate.php', 'classes' );
+			$this->table['data'] = $formula_evaluator->evaluate_table_data( $this->table['data'], $this->table['id'] );
+		}
+
 		/**
 		 * Filters the table after evaluating formulas in the table.
 		 *
@@ -228,6 +231,7 @@ class TablePress_Render {
 					}
 				}
 				$this->render_options[ "{$action}_{$element}" ] = array_merge( $this->render_options[ "{$action}_{$element}" ], $range_cells );
+
 				/*
 				 * Parse single letters and change from regular numbering to zero-based numbering,
 				 * as rows/columns are indexed from 0 internally, but from 1 externally.
@@ -304,7 +308,16 @@ class TablePress_Render {
 				if ( false !== strpos( $cell_content, '[' ) ) {
 					$cell_content = do_shortcode( $cell_content );
 				}
-				/** This filter is documented in classes/class-render.php */
+				/**
+				 * Filters the content of a single cell, after formulas have been evaluated, the output has been sanitized, and Shortcodes have been evaluated.
+				 *
+				 * @since 1.0.0
+				 *
+				 * @param string $cell_content The cell content.
+				 * @param string $table_id     The current table ID.
+				 * @param int    $row_idx      The row number of the cell.
+				 * @param int    $col_idx      The column number of the cell.
+				 */
 				$cell_content = apply_filters( 'tablepress_cell_content', $cell_content, $this->table['id'], $row_idx + 1, $col_idx + 1 );
 				$this->table['data'][ $row_idx ][ $col_idx ] = $cell_content;
 			}
@@ -325,7 +338,6 @@ class TablePress_Render {
 		 * @param array $render_options The render options for the table.
 		 */
 		$this->table = apply_filters( 'tablepress_table_content_render_data', $this->table, $orig_table, $this->render_options );
-
 	}
 
 	/**
@@ -670,7 +682,7 @@ class TablePress_Render {
 					|| ( $this->last_row_idx === $row_idx && $this->render_options['table_foot'] ) // No rowspan out of table foot.
 				) ) {
 					// Increase counter for rowspan in this column.
-					$this->rowspan[ $col_idx ]++;
+					++$this->rowspan[ $col_idx ];
 					// Reset counter for colspan in this row, combined col- and rowspan might be happening.
 					$this->colspan[ $row_idx ] = 1;
 					continue;
@@ -683,7 +695,7 @@ class TablePress_Render {
 					|| ( 1 === $col_idx && $this->render_options['first_column_th'] ) // No colspan into first column head.
 				) ) {
 					// Increase counter for colspan in this row.
-					$this->colspan[ $row_idx ]++;
+					++$this->colspan[ $row_idx ];
 					// Reset counter for rowspan in this column, combined col- and rowspan might be happening.
 					$this->rowspan[ $col_idx ] = 1;
 					continue;
@@ -864,39 +876,40 @@ class TablePress_Render {
 	public function get_default_render_options() {
 		// Attention: Array keys have to be lowercase, otherwise they won't match the Shortcode attributes, which will be passed in lowercase by WP.
 		return array(
-			'id'                          => '',
-			'column_widths'               => '',
 			'alternating_row_colors'      => null,
-			'row_hover'                   => null,
-			'table_head'                  => null,
-			'table_foot'                  => null,
-			'first_column_th'             => false,
-			'print_name'                  => null,
-			'print_name_position'         => null,
-			'print_description'           => null,
-			'print_description_position'  => null,
+			'border'                      => false,
 			'cache_table_output'          => true,
+			'cellpadding'                 => false,
+			'cellspacing'                 => false,
+			'column_widths'               => '',
 			'convert_line_breaks'         => true,
-			'extra_css_classes'           => null,
-			'use_datatables'              => null,
-			'datatables_sort'             => null,
-			'datatables_paginate'         => null,
-			'datatables_paginate_entries' => null,
-			'datatables_lengthchange'     => null,
+			'datatables_custom_commands'  => null,
 			'datatables_filter'           => null,
 			'datatables_info'             => null,
+			'datatables_lengthchange'     => null,
+			'datatables_locale'           => get_locale(),
+			'datatables_paginate'         => null,
+			'datatables_paginate_entries' => null,
 			'datatables_scrollx'          => null,
 			'datatables_scrolly'          => false,
-			'datatables_custom_commands'  => null,
-			'datatables_locale'           => get_locale(),
-			'show_rows'                   => '',
-			'show_columns'                => '',
-			'hide_rows'                   => '',
+			'datatables_sort'             => null,
+			'evaluate_formulas'           => true,
+			'extra_css_classes'           => null,
+			'first_column_th'             => false,
 			'hide_columns'                => '',
-			'cellspacing'                 => false,
-			'cellpadding'                 => false,
-			'border'                      => false,
+			'hide_rows'                   => '',
+			'id'                          => '',
+			'print_description'           => null,
+			'print_description_position'  => null,
+			'print_name'                  => null,
+			'print_name_position'         => null,
+			'row_hover'                   => null,
 			'shortcode_debug'             => false,
+			'show_columns'                => '',
+			'show_rows'                   => '',
+			'table_foot'                  => null,
+			'table_head'                  => null,
+			'use_datatables'              => null,
 		);
 	}
 
@@ -924,7 +937,7 @@ class TablePress_Render {
 		$rtl_direction = $is_rtl ? "\ndirection: rtl;" : '';
 
 		return <<<CSS
-<style type="text/css">
+<style>
 /* iframe */
 body {
 	margin: 10px;

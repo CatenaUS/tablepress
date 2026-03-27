@@ -27,7 +27,7 @@ abstract class TablePress {
 	 * @since 1.0.0
 	 * @const string
 	 */
-	const version = '2.0-RC1'; // phpcs:ignore Generic.NamingConventions.UpperCaseConstantName.ClassConstantNotUpperCase
+	const version = '2.1.3'; // phpcs:ignore Generic.NamingConventions.UpperCaseConstantName.ClassConstantNotUpperCase
 
 	/**
 	 * TablePress internal plugin version ("options scheme" version).
@@ -37,7 +37,7 @@ abstract class TablePress {
 	 * @since 1.0.0
 	 * @const int
 	 */
-	const db_version = 46; // phpcs:ignore Generic.NamingConventions.UpperCaseConstantName.ClassConstantNotUpperCase
+	const db_version = 59; // phpcs:ignore Generic.NamingConventions.UpperCaseConstantName.ClassConstantNotUpperCase
 
 	/**
 	 * TablePress "table scheme" (data format structure) version.
@@ -95,6 +95,14 @@ abstract class TablePress {
 	public static $shortcode_info = 'table-info';
 
 	/**
+	 * List of TablePress premium modules.
+	 *
+	 * @since 2.1.0
+	 * @var array
+	 */
+	public static $modules = array();
+
+	/**
 	 * Start-up TablePress (run on WordPress "init") and load the controller for the current state.
 	 *
 	 * @since 1.0.0
@@ -110,7 +118,7 @@ abstract class TablePress {
 		do_action( 'tablepress_run' );
 
 		// Check if minimum requirements are fulfilled, currently WordPress 5.8.
-		include( ABSPATH . WPINC . '/version.php' ); // Include an unmodified $wp_version.
+		include ABSPATH . WPINC . '/version.php'; // Include an unmodified $wp_version.
 		if ( version_compare( str_replace( '-src', '', $wp_version ), '5.8', '<' ) ) {
 			// Show error notice to admins, if WP is not installed in the minimum required version, in which case TablePress will not work.
 			if ( current_user_can( 'update_plugins' ) ) {
@@ -422,6 +430,34 @@ abstract class TablePress {
 	}
 
 	/**
+	 * Retrieves all information of a WP_Error object as a string.
+	 *
+	 * @since 1.4.0
+	 *
+	 * @param WP_Error $wp_error A WP_Error object.
+	 * @return string All error codes, messages, and data of the WP_Error.
+	 */
+	public static function get_wp_error_string( $wp_error ) {
+		$error_strings = array();
+		$error_codes = $wp_error->get_error_codes();
+		// Reverse order to get latest errors first.
+		$error_codes = array_reverse( $error_codes );
+		foreach ( $error_codes as $error_code ) {
+			$error_strings[ $error_code ] = $error_code;
+			$error_messages = $wp_error->get_error_messages( $error_code );
+			$error_messages = implode( ', ', $error_messages );
+			if ( ! empty( $error_messages ) ) {
+				$error_strings[ $error_code ] .= " ({$error_messages})";
+			}
+			$error_data = $wp_error->get_error_data( $error_code );
+			if ( ! is_null( $error_data ) ) {
+				$error_strings[ $error_code ] .= " [{$error_data}]";
+			}
+		}
+		return implode( ";\n", $error_strings );
+	}
+
+	/**
 	 * Generate the action URL, to be used as a link within the plugin (e.g. in the submenu navigation or List of Tables).
 	 *
 	 * @since 1.0.0
@@ -503,6 +539,255 @@ abstract class TablePress {
 			'<strong>Attention:</strong> ' .
 			'The installed version of WordPress is too old for the TablePress plugin! TablePress requires an up-to-date version! <strong>Please <a href="' . esc_url( admin_url( 'update-core.php' ) ) . '">update your WordPress installation</a></strong>!' .
 			"</p></div>\n";
+	}
+
+	/**
+	 * Determines whether the site uses the block editor, so that certain text and input fields referring to Shortcodes can be displayed or not.
+	 *
+	 * @since 2.0.1
+	 *
+	 * @return bool True if the site uses the block editor, false otherwise.
+	 */
+	public static function site_uses_block_editor() {
+		$site_uses_block_editor = use_block_editor_for_post_type( 'post' )
+			&& ! is_plugin_active( 'beaver-builder-lite-version/fl-builder.php' )
+			&& ! is_plugin_active( 'classic-editor/classic-editor.php' )
+			&& ! is_plugin_active( 'classic-editor-addon/classic-editor-addon.php' )
+			&& ! is_plugin_active( 'elementor/elementor.php' )
+			&& ! is_plugin_active( 'siteorigin-panels/siteorigin-panels.php' );
+
+		/**
+		 * Filters the outcome of the check whether the site uses the block editor.
+		 *
+		 * This can be used when certain conditions (e.g. new site builders) are not (yet) accounted for.
+		 *
+		 * @since 2.0.1
+		 *
+		 * @param bool $site_uses_block_editor True if the site uses the block editor, false otherwise.
+		 */
+		$site_uses_block_editor = apply_filters( 'tablepress_site_uses_block_editor', $site_uses_block_editor );
+
+		return $site_uses_block_editor;
+	}
+
+	/**
+	 * Initializes the list of TablePress premium modules.
+	 *
+	 * @since 2.1.0
+	 */
+	public static function init_modules() {
+		self::$modules = array(
+			'advanced-access-rights'              => array(
+				'name'                 => __( 'Advanced Access Rights', 'tablepress' ),
+				'description'          => __( 'Restrict access to individual tables for individual users.', 'tablepress' ),
+				'category'             => 'backend',
+				'class'                => 'TablePress_Module_Advanced_Access_Rights',
+				'incompatible_classes' => array( 'TablePress_Advanced_Access_Rights_Controller' ),
+				'minimum_plan'         => 'max',
+				'default_active'       => false,
+			),
+			'automatic-periodic-table-import'     => array(
+				'name'                 => __( 'Automatic Periodic Table Import', 'tablepress' ),
+				'description'          => __( 'Periodically update tables from a configured import source.', 'tablepress' ),
+				'category'             => 'backend',
+				'class'                => 'TablePress_Module_Automatic_Periodic_Table_Import',
+				'incompatible_classes' => array( 'TablePress_Table_Auto_Update' ),
+				'minimum_plan'         => 'max',
+				'default_active'       => true,
+			),
+			'automatic-table-export'              => array(
+				'name'                 => __( 'Automatic Table Export', 'tablepress' ),
+				'description'          => __( 'Export and save tables to files on the server after they were modified.', 'tablepress' ),
+				'category'             => 'backend',
+				'class'                => 'TablePress_Module_Automatic_Table_Export',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'cell-highlighting'                   => array(
+				'name'                 => __( 'Cell Highlighting', 'tablepress' ),
+				'description'          => __( 'Add CSS classes to cells for highlighting based on their content.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_Cell_Highlighting',
+				'incompatible_classes' => array( 'TablePress_Cell_Highlighting' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'column-order'                        => array(
+				'name'                 => __( 'Column Order', 'tablepress' ),
+				'description'          => __( 'Order the columns in different ways when a table is shown.', 'tablepress' ),
+				'category'             => 'data-management',
+				'class'                => 'TablePress_Module_Column_Order',
+				'incompatible_classes' => array( 'TablePress_Column_Order' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-advanced-loading'         => array(
+				'name'                 => __( 'Advanced Loading', 'tablepress' ),
+				'description'          => __( 'Load the table data from a JSON array for faster loading.', 'tablepress' ),
+				'category'             => 'backend',
+				'class'                => 'TablePress_Module_DataTables_Advanced_Loading',
+				'incompatible_classes' => array( 'TablePress_DataTables_Advanced_Loading' ),
+				'minimum_plan'         => 'max',
+				'default_active'       => false,
+			),
+			'datatables-alphabetsearch'           => array(
+				'name'                 => __( 'Alphabet Search', 'tablepress' ),
+				'description'          => __( 'Show Alphabet buttons above the table to filter rows by their first letter.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_Alphabetsearch',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-auto-filter'              => array(
+				'name'                 => __( 'Automatic Filter', 'tablepress' ),
+				'description'          => __( 'Pre-filter a table when it is shown.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_Auto_Filter',
+				'incompatible_classes' => array( 'TablePress_DataTables_Auto_Filter' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-buttons'                  => array(
+				'name'                 => __( 'Buttons', 'tablepress' ),
+				'description'          => __( 'Add buttons for downloading, copying, printing, and changing column visibility of tables.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_DataTables_Buttons',
+				'incompatible_classes' => array( 'TablePress_DataTables_Buttons' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => true,
+			),
+			'datatables-columnfilterwidgets'      => array(
+				'name'                 => __( 'Column Filter Dropdowns', 'tablepress' ),
+				'description'          => __( 'Add a search dropdown for each column above the table.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_ColumnFilterWidgets',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => true,
+			),
+			'datatables-column-filter'            => array(
+				'name'                 => __( 'Individual Column Filtering', 'tablepress' ),
+				'description'          => __( 'Add a search field for each column to the table head or foot row.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_Column_Filter',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-counter-column'           => array(
+				'name'                 => __( 'Counter Column', 'tablepress' ),
+				'description'          => __( 'Make the first column an index or counter column with the row position.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_DataTables_Counter_Column',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-fixedheader-fixedcolumns' => array(
+				'name'                 => __( 'Fixed Rows and Columns', 'tablepress' ),
+				'description'          => __( 'Fix the header and footer row and the first and last column when scrolling the table.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_DataTables_FixedHeader_FixedColumns',
+				'incompatible_classes' => array(
+					'TablePress_DataTables_FixedHeader',
+					'TablePress_DataTables_FixedColumns',
+				),
+				'minimum_plan'         => 'pro',
+				'default_active'       => true,
+			),
+			'datatables-rowgroup'                 => array(
+				'name'                 => __( 'Row Grouping', 'tablepress' ),
+				'description'          => __( 'Group table rows by a common keyword, category, or title.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_DataTables_RowGroup',
+				'incompatible_classes' => array( 'TablePress_DataTables_RowGroup' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-searchbuilder'            => array(
+				'name'                 => __( 'Custom Search Builder', 'tablepress' ),
+				'description'          => __( 'Show a search builder interface for filtering from groups and using conditions.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_SearchBuilder',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'max',
+				'default_active'       => false,
+			),
+			'datatables-searchhighlight'          => array(
+				'name'                 => __( 'Search Highlighting', 'tablepress' ),
+				'description'          => __( 'Highlight found search terms in the table.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_SearchHighlight',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-searchpanes'              => array(
+				'name'                 => __( 'Search Panes', 'tablepress' ),
+				'description'          => __( 'Show panes for filtering the columns.', 'tablepress' ),
+				'category'             => 'search-filter',
+				'class'                => 'TablePress_Module_DataTables_SearchPanes',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'datatables-serverside-processing'    => array(
+				'name'                 => __( 'Server-side Processing', 'tablepress' ),
+				'description'          => __( 'Process sorting, filtering, and pagination on the server for faster loading of large tables.', 'tablepress' ),
+				'category'             => 'backend',
+				'class'                => 'TablePress_Module_DataTables_ServerSide_Processing',
+				'incompatible_classes' => array(),
+				'minimum_plan'         => 'max',
+				'default_active'       => true,
+			),
+			'responsive-tables'                   => array(
+				'name'                 => __( 'Responsive Tables', 'tablepress' ),
+				'description'          => __( 'Make your tables look good on different screen sizes.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_Responsive_Tables',
+				'incompatible_classes' => array( 'TablePress_Responsive_Tables' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => true,
+			),
+			'rest-api'                            => array(
+				'name'                 => __( 'REST API', 'tablepress' ),
+				'description'          => __( 'Read table data via the WordPress REST API, e.g. in external apps.', 'tablepress' ),
+				'category'             => 'backend',
+				'class'                => 'TablePress_Module_REST_API',
+				'incompatible_classes' => array( 'TablePress_REST_API_Controller' ),
+				'minimum_plan'         => 'max',
+				'default_active'       => false,
+			),
+			'row-filtering'                       => array(
+				'name'                 => __( 'Row Filtering', 'tablepress' ),
+				'description'          => __( 'Show only table rows that contain defined keywords.', 'tablepress' ),
+				'category'             => 'data-management',
+				'class'                => 'TablePress_Module_Row_Filtering',
+				'incompatible_classes' => array( 'TablePress_Row_Filter' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => true,
+			),
+			'row-highlighting'                    => array(
+				'name'                 => __( 'Row Highlighting', 'tablepress' ),
+				'description'          => __( 'Add CSS classes to rows for highlighting based on their content.', 'tablepress' ),
+				'category'             => 'frontend',
+				'class'                => 'TablePress_Module_Row_Highlighting',
+				'incompatible_classes' => array( 'TablePress_Row_Highlighting' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+			'row-order'                           => array(
+				'name'                 => __( 'Row Order', 'tablepress' ),
+				'description'          => __( 'Order the rows in different ways when a table is shown.', 'tablepress' ),
+				'category'             => 'data-management',
+				'class'                => 'TablePress_Module_Row_Order',
+				'incompatible_classes' => array( 'TablePress_Row_Order' ),
+				'minimum_plan'         => 'pro',
+				'default_active'       => false,
+			),
+		);
 	}
 
 } // class TablePress

@@ -2,71 +2,93 @@
 
 namespace TablePress\PhpOffice\PhpSpreadsheet\Worksheet;
 
-use Iterator;
+use Iterator as NativeIterator;
 use TablePress\PhpOffice\PhpSpreadsheet\Cell\Cell;
 use TablePress\PhpOffice\PhpSpreadsheet\Collection\Cells;
 
 /**
  * @template TKey
  *
- * @implements Iterator<TKey, Cell>
+ * @implements NativeIterator<TKey, Cell>
  */
-abstract class CellIterator implements Iterator
+abstract class CellIterator implements NativeIterator
 {
-    public const TREAT_NULL_VALUE_AS_EMPTY_CELL = 1;
+	public const TREAT_NULL_VALUE_AS_EMPTY_CELL = 1;
 
-    public const TREAT_EMPTY_STRING_AS_EMPTY_CELL = 2;
+	public const TREAT_EMPTY_STRING_AS_EMPTY_CELL = 2;
 
-    /**
-     * Worksheet to iterate.
-     *
-     * @var Worksheet
-     */
-    protected $worksheet;
+	public const IF_NOT_EXISTS_RETURN_NULL = false;
 
-    /**
-     * Cell Collection to iterate.
-     *
-     * @var Cells
-     */
-    protected $cellCollection;
+	public const IF_NOT_EXISTS_CREATE_NEW = true;
 
-    /**
-     * Iterate only existing cells.
-     *
-     * @var bool
-     */
-    protected $onlyExistingCells = false;
+	/**
+	 * Worksheet to iterate.
+	 *
+	 * @var Worksheet
+	 */
+	protected $worksheet;
 
-    /**
-     * Destructor.
-     */
-    public function __destruct()
-    {
-        // @phpstan-ignore-next-line
-        $this->worksheet = $this->cellCollection = null;
-    }
+	/**
+	 * Cell Collection to iterate.
+	 *
+	 * @var Cells
+	 */
+	protected $cellCollection;
 
-    /**
-     * Get loop only existing cells.
-     */
-    public function getIterateOnlyExistingCells(): bool
-    {
-        return $this->onlyExistingCells;
-    }
+	/**
+	 * Iterate only existing cells.
+	 *
+	 * @var bool
+	 */
+	protected $onlyExistingCells = false;
 
-    /**
-     * Validate start/end values for "IterateOnlyExistingCells" mode, and adjust if necessary.
-     */
-    abstract protected function adjustForExistingOnlyRange();
+	/**
+	 * If iterating all cells, and a cell doesn't exist, identifies whether a new cell should be created,
+	 *    or if the iterator should return a null value.
+	 *
+	 * @var bool
+	 */
+	protected $ifNotExists = self::IF_NOT_EXISTS_CREATE_NEW;
 
-    /**
-     * Set the iterator to loop only existing cells.
-     */
-    public function setIterateOnlyExistingCells(bool $value): void
-    {
-        $this->onlyExistingCells = (bool) $value;
+	/**
+	 * Destructor.
+	 */
+	public function __destruct()
+	{
+		// @phpstan-ignore-next-line
+		$this->worksheet = $this->cellCollection = null;
+	}
 
-        $this->adjustForExistingOnlyRange();
-    }
+	public function getIfNotExists(): bool
+	{
+		return $this->ifNotExists;
+	}
+
+	public function setIfNotExists(bool $ifNotExists = self::IF_NOT_EXISTS_CREATE_NEW): void
+	{
+		$this->ifNotExists = $ifNotExists;
+	}
+
+	/**
+	 * Get loop only existing cells.
+	 */
+	public function getIterateOnlyExistingCells(): bool
+	{
+		return $this->onlyExistingCells;
+	}
+
+	/**
+	 * Validate start/end values for 'IterateOnlyExistingCells' mode, and adjust if necessary.
+	 */
+	abstract protected function adjustForExistingOnlyRange(): void;
+
+	/**
+	 * Set the iterator to loop only existing cells.
+	 */
+	public function setIterateOnlyExistingCells(bool $value): void
+	{
+		$this->onlyExistingCells = (bool) $value;
+
+		$this->adjustForExistingOnlyRange();
+	}
 }

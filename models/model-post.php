@@ -108,6 +108,7 @@ class TablePress_Post_Model extends TablePress_Model {
 		// Remove balanceTags() from sanitize_post(), as it can destroy the JSON when messing with HTML.
 		remove_filter( 'content_save_pre', 'balanceTags', 50 );
 		remove_filter( 'excerpt_save_pre', 'balanceTags', 50 );
+
 		/*
 		 * Remove possible KSES filtering, as it can destroy the JSON when messing with HTML.
 		 * KSES filtering is done to table cells individually, when saving.
@@ -116,6 +117,7 @@ class TablePress_Post_Model extends TablePress_Model {
 		if ( $has_kses ) {
 			kses_remove_filters();
 		}
+
 		// Remove filter that adds `rel="noopener" to <a> HTML tags, but destroys JSON code. See https://core.trac.wordpress.org/ticket/46316.
 		$has_targeted_link_rel_filters = ( false !== has_filter( 'content_save_pre', 'wp_targeted_link_rel' ) );
 		if ( $has_targeted_link_rel_filters ) {
@@ -136,7 +138,7 @@ class TablePress_Post_Model extends TablePress_Model {
 
 		// In rare cases, `wp_insert_post()` returns 0 as the post ID, when an error happens, so it's converted to a WP_Error here.
 		if ( 0 === $post_id ) {
-			return new WP_Error( 'table_add_post_insert', '', $post_id );
+			return new WP_Error( 'post_insert', '' );
 		}
 
 		return $post_id;
@@ -173,6 +175,7 @@ class TablePress_Post_Model extends TablePress_Model {
 		// Remove balanceTags() from sanitize_post(), as it can destroy the JSON when messing with HTML.
 		remove_filter( 'content_save_pre', 'balanceTags', 50 );
 		remove_filter( 'excerpt_save_pre', 'balanceTags', 50 );
+
 		/*
 		 * Remove possible KSES filtering, as it can destroy the JSON when messing with HTML.
 		 * KSES filtering is done to table cells individually, when saving.
@@ -181,6 +184,7 @@ class TablePress_Post_Model extends TablePress_Model {
 		if ( $has_kses ) {
 			kses_remove_filters();
 		}
+
 		// Remove filter that adds `rel="noopener" to <a> HTML tags, but destroys JSON code. See https://core.trac.wordpress.org/ticket/46316.
 		$has_targeted_link_rel_filters = ( false !== has_filter( 'content_save_pre', 'wp_targeted_link_rel' ) );
 		if ( $has_targeted_link_rel_filters ) {

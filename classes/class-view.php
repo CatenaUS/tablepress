@@ -105,7 +105,7 @@ abstract class TablePress_View {
 		if ( tb_tp_fs()->is_free_plan() ) {
 			$common_content .= '<p>' . sprintf( __( '<a href="%1$s">Support</a> is provided through the <a href="%2$s">WordPress Support Forums</a>.', 'tablepress' ), 'https://tablepress.org/support/', 'https://wordpress.org/tags/tablepress' ) . ' '
 						. sprintf( __( 'Before asking for support, please carefully read the <a href="%s">Frequently Asked Questions</a>, where you will find answers to the most common questions, and search through the forums.', 'tablepress' ), 'https://tablepress.org/faq/' ) . '</p>';
-			$common_content .= '<p>' . sprintf( __( 'If you like the plugin, <a href="%1$s"><strong>a donation</strong></a> is recommended.', 'tablepress' ), 'https://tablepress.org/donate/' ) . '</p>';
+			$common_content .= '<p><strong>' . sprintf( __( 'More great features for you and your site’s visitors and priority email support are available with a Premium license plan of TablePress. <a href="%s">Go check them out!</a>', 'tablepress' ), 'https://tablepress.org/premium/' ) . '</strong></p>';
 		}
 
 		$screen->add_help_tab( array(
@@ -164,7 +164,7 @@ abstract class TablePress_View {
 		if ( is_rtl() ) {
 			$this->admin_page->enqueue_style( 'common-rtl', array( 'tablepress-common' ) );
 		}
-		$this->admin_page->enqueue_script( 'common', array( 'postbox' ) );
+		$this->admin_page->enqueue_script( 'common', array( 'jquery-core', 'postbox' ) );
 
 		$this->admin_page->add_admin_footer_text();
 
@@ -209,8 +209,13 @@ abstract class TablePress_View {
 	 */
 	protected function process_action_messages( array $action_messages ) {
 		if ( $this->data['message'] && isset( $action_messages[ $this->data['message'] ] ) ) {
-			$class = ( 'error' === substr( $this->data['message'], 0, 5 ) ) ? 'notice-error' : 'notice-success';
-			$this->add_header_message( "<strong>{$action_messages[ $this->data['message'] ]}</strong>", $class );
+			$class = ( 0 === strpos( $this->data['message'], 'error' ) ) ? 'notice-error' : 'notice-success';
+
+			if ( '' !== $this->data['error_details'] ) {
+				$this->data['error_details'] = '</p><p>' . sprintf( __( 'Error code: %s', 'tablepress' ), '<code>' . esc_html( $this->data['error_details'] ) . '</code>' );
+			}
+
+			$this->add_header_message( "<strong>{$action_messages[ $this->data['message'] ]}</strong>{$this->data['error_details']}", $class );
 		}
 	}
 
@@ -346,7 +351,11 @@ abstract class TablePress_View {
 		?>
 		<div id="tablepress-page" class="wrap">
 		<?php
-		$this->print_nav_tab_menu();
+			$this->print_nav_tab_menu();
+		?>
+		<div id="tablepress-body">
+		<hr class="wp-header-end" />
+		<?php
 		// Print all header messages.
 		foreach ( $this->header_messages as $message ) {
 			echo $message;
@@ -356,7 +365,7 @@ abstract class TablePress_View {
 		?>
 		<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post"<?php echo $enctype; ?>>
 			<?php
-			$this->do_text_boxes( 'header' );
+				$this->do_text_boxes( 'header' );
 			?>
 			<div id="poststuff">
 				<div id="post-body" class="metabox-holder columns-<?php echo ( isset( $GLOBALS['screen_layout_columns'] ) && ( 2 === $GLOBALS['screen_layout_columns'] ) ) ? '2' : '1'; ?>">
@@ -384,6 +393,7 @@ abstract class TablePress_View {
 			</div>
 		</form>
 		</div>
+		</div>
 		<?php
 	}
 
@@ -394,10 +404,19 @@ abstract class TablePress_View {
 	 */
 	protected function print_nav_tab_menu() {
 		?>
-		<div id="tablepress-page-head">
-			<img src="<?php echo plugins_url( 'admin/img/tablepress-icon.png', TABLEPRESS__FILE__ ); ?>" class="tablepress-icon" alt="<?php esc_attr_e( 'TablePress plugin logo', 'tablepress' ); ?>" />
-			<h1><?php _e( 'TablePress', 'tablepress' ); ?></h1>
-		</div><div id="tablepress-nav" class="nav-tab-wrapper">
+		<div id="tablepress-header" class="header">
+			<h1 class="name"><img src="<?php echo plugins_url( 'admin/img/tablepress-icon.png', TABLEPRESS__FILE__ ); ?>" class="tablepress-icon" alt="<?php esc_attr_e( 'TablePress plugin logo', 'tablepress' ); ?>" /><?php _e( 'TablePress', 'tablepress' ); ?><?php echo tb_tp_fs()->is_plan_or_trial( 'pro', true ) ? ' Pro' : ( tb_tp_fs()->is_plan_or_trial( 'max', true ) ? ' Max' : '' ); ?></h1>
+			<?php if ( tb_tp_fs()->is_free_plan() ) : ?>
+				<div class="buttons">
+					<a href="<?php echo 'https://tablepress.org/premium/'; ?>" class="tablepress-button">
+						<span><?php _e( 'Upgrade to Premium', 'tablepress' ); ?></span>
+						<span class="dashicons dashicons-arrow-right-alt"></span>
+					</a>
+				</div>
+			<?php endif; ?>
+		</div>
+		<nav id="tablepress-nav">
+			<ul class="nav-menu">
 			<?php
 			foreach ( $this->data['view_actions'] as $action => $entry ) {
 				if ( '' === $entry['nav_tab_title'] ) {
@@ -408,12 +427,38 @@ abstract class TablePress_View {
 				}
 
 				$url = esc_url( TablePress::url( array( 'action' => $action ) ) );
-				$active = ( $action === $this->action ) ? ' nav-tab-active' : '';
-				$separator = ( 'options' === $action ) ? ' nav-tab-separator' : ''; // Make the "Plugin Options" entry a separator, for some spacing.
-				echo "<a id=\"tablepress-nav-tab-{$action}\" class=\"nav-tab{$active}{$separator}\" href=\"{$url}\">{$entry['nav_tab_title']}</a>";
+				$active = ( $action === $this->action ) ? ' active' : '';
+				$separator = ( 'export' === $action ) ? ' separator' : ''; // Make the "Export" entry a separator, for some spacing.
+				echo "<li class=\"nav-item\"><a id=\"tablepress-nav-item-{$action}\" class=\"nav-link{$active}{$separator}\" href=\"{$url}\">{$entry['nav_tab_title']}</a></li>";
 			}
 			?>
-		</div><hr class="wp-header-end" />
+			</ul>
+		</nav>
+		<?php
+	}
+
+	/**
+	 * Prints a notification about JavaScript not being activated in the browser.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param array $data Data for this screen.
+	 * @param array $box  Information about the text box.
+	 */
+	public function textbox_no_javascript( array $data, array $box ) {
+		?>
+		<div class="notice notice-error notice-alt notice-large hide-if-js">
+			<h3><em>
+				<?php _e( 'Attention: Unfortunately, there is a problem!', 'tablepress' ); ?>
+			</em></h3>
+			<p style="font-size:14px">
+				<strong><?php _e( 'This screen requires JavaScript. Please enable JavaScript in your browser settings.', 'tablepress' ); ?></strong><br />
+				<?php _e( 'For help, please follow <a href="https://www.enable-javascript.com/">the instructions on how to enable JavaScript in your browser</a>.', 'tablepress' ); ?>
+			</p>
+			<p>
+				<?php echo '<a href="' . TablePress::url( array( 'action' => 'list' ) ) . '">' . __( 'Back to the List of Tables', 'tablepress' ) . '</a>'; ?>
+			</p>
+		</div>
 		<?php
 	}
 

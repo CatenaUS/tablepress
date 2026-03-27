@@ -67,8 +67,9 @@ abstract class TablePress_Controller {
 		$current_plugin_options_db_version = TablePress::$model_options->get( 'plugin_options_db_version' );
 		if ( $current_plugin_options_db_version < TablePress::db_version ) {
 			// Allow more PHP execution time for update process.
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			@set_time_limit( 300 );
+			if ( function_exists( 'set_time_limit' ) ) {
+				@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			}
 
 			// Add TablePress capabilities to the WP_Roles objects, for new installations and all versions below 12.
 			if ( $current_plugin_options_db_version < 12 ) {
@@ -134,38 +135,10 @@ abstract class TablePress_Controller {
 		 * Update User Options, if necessary.
 		 * User Options are not saved in DB until first change occurs.
 		 */
-		if ( is_user_logged_in() && ( TablePress::$model_options->get( 'user_options_db_version' ) < TablePress::db_version ) ) {
+		if ( is_user_logged_in() && TablePress::$model_options->get( 'user_options_db_version' ) < TablePress::db_version ) {
 			TablePress::$model_options->merge_user_options_defaults();
 			TablePress::$model_options->update( 'user_options_db_version', TablePress::db_version );
 		}
-	}
-
-	/**
-	 * Retrieve all information of a WP_Error object as a string.
-	 *
-	 * @since 1.4.0
-	 *
-	 * @param WP_Error $wp_error A WP_Error object.
-	 * @return string All error codes, messages, and data of the WP_Error.
-	 */
-	protected function get_wp_error_string( $wp_error ) {
-		$error_strings = array();
-		$error_codes = $wp_error->get_error_codes();
-		// Reverse order to get latest errors first.
-		$error_codes = array_reverse( $error_codes );
-		foreach ( $error_codes as $error_code ) {
-			$error_strings[ $error_code ] = $error_code;
-			$error_messages = $wp_error->get_error_messages( $error_code );
-			$error_messages = implode( ', ', $error_messages );
-			if ( ! empty( $error_messages ) ) {
-				$error_strings[ $error_code ] .= " ({$error_messages})";
-			}
-			$error_data = $wp_error->get_error_data( $error_code );
-			if ( ! is_null( $error_data ) ) {
-				$error_strings[ $error_code ] .= " [{$error_data}]";
-			}
-		}
-		return implode( ";\n", $error_strings );
 	}
 
 } // class TablePress_Controller

@@ -44,6 +44,13 @@ class TablePress_Import_PHPSpreadsheet extends TablePress_Import_Base {
 		if ( false === $data ) {
 			return new WP_Error( 'table_import_phpspreadsheet_data_read', '', $file['location'] );
 		}
+
+		// Remove a possible UTF-8 Byte-Order Mark (BOM).
+		$bom = pack( 'CCC', 0xef, 0xbb, 0xbf );
+		if ( 0 === strncmp( $data, $bom, 3 ) ) {
+			$data = substr( $data, 3 );
+		}
+
 		if ( '' === $data ) {
 			return new WP_Error( 'table_import_phpspreadsheet_data_empty', '', $file['location'] );
 		}
@@ -95,7 +102,17 @@ class TablePress_Import_PHPSpreadsheet extends TablePress_Import_Base {
 			$table = array( 'data' => array() );
 			foreach ( $json_table as $row ) {
 				// Turn row into indexed arrays with numeric keys.
-				$table['data'][] = array_values( (array) $row );
+				$row = array_values( (array) $row );
+
+				// Remove entries of multi-dimensional arrays.
+				foreach ( $row as &$cell ) {
+					if ( is_array( $cell ) ) {
+						$cell = '';
+					}
+				}
+				unset( $cell ); // Unset use-by-reference parameter of foreach loop.
+
+				$table['data'][] = $row;
 			}
 		}
 
@@ -149,7 +166,20 @@ class TablePress_Import_PHPSpreadsheet extends TablePress_Import_Base {
 			\TablePress\PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder( new \TablePress\PhpOffice\PhpSpreadsheet\Cell\StringValueBinder() );
 			\TablePress\PhpOffice\PhpSpreadsheet\Cell\Cell::getValueBinder()->setFormulaConversion( false );
 
-			$reader = \TablePress\PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile( $file['location'] );
+			/*
+			 * Try to detect a reader from the file extension and MIME type.
+			 * Fall back to CSV if no reader could be determined.
+			 */
+			try {
+				$reader = \TablePress\PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile( $file['location'] );
+			} catch ( \TablePress\PhpOffice\PhpSpreadsheet\Reader\Exception $exception ) {
+				$reader = \TablePress\PhpOffice\PhpSpreadsheet\IOFactory::createReader( 'Csv' );
+				// Append .csv to the file name, so that \TablePress\PhpOffice\PhpSpreadsheet\Reader\Csv::canRead() returns true.
+				$new_location = $file['location'] . '.csv';
+				if ( rename( $file['location'], $new_location ) ) {
+					$file['location'] = $new_location;
+				}
+			}
 
 			$class_name = get_class( $reader );
 			$class_type = explode( '\\', $class_name );
@@ -208,7 +238,7 @@ class TablePress_Import_PHPSpreadsheet extends TablePress_Import_Base {
 					if ( $value instanceof \TablePress\PhpOffice\PhpSpreadsheet\RichText\RichText ) {
 						$cell_data = $this->parse_rich_text( $value );
 					} else {
-						$cell_data = $value;
+						$cell_data = (string) $value;
 					}
 
 					// Apply data type formatting.
@@ -219,9 +249,15 @@ class TablePress_Import_PHPSpreadsheet extends TablePress_Import_Base {
 						array( $this, 'format_color' )
 					);
 
-					// Prepend a ' to quoted/escaped formulas (so that they are shown as text). This is currently not supported (at least) for the XLS format.
-					if ( $style->getQuotePrefix() && strlen( $cell_data ) > 1 && '=' === $cell_data[0] ) {
-						$cell_data = "'{$cell_data}";
+					if ( strlen( $cell_data ) > 1 && '=' === $cell_data[0] ) {
+						if ( $style->getQuotePrefix() ) {
+							// Prepend a ' to quoted/escaped formulas (so that they are shown as text). This is currently not supported (at least) for the XLS format.
+							$cell_data = "'{$cell_data}";
+						} else {
+							// Bail early, to not add inline HTML styling around formulas, as they won't work anymore then.
+							$row_data[] = $cell_data;
+							continue;
+						}
 					}
 
 					$cell_has_hyperlink = $worksheet->hyperlinkExists( $cell_reference ) && ! $worksheet->getHyperlink( $cell_reference )->isInternal();
@@ -306,7 +342,7 @@ class TablePress_Import_PHPSpreadsheet extends TablePress_Import_Base {
 
 			return $table;
 		} catch ( \TablePress\PhpOffice\PhpSpreadsheet\Reader\Exception $exception ) {
-			return new WP_Error( 'table_import_phpspreadsheet_failed', '', array( 'exception' => $exception->getMessage() ) );
+			return new WP_Error( 'table_import_phpspreadsheet_failed', '', 'Exception: ' . $exception->getMessage() );
 		}
 	}
 

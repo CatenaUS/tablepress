@@ -29,9 +29,13 @@ export default function contextMenu( obj /*, x, y, e */ ) {
 	const num_columns = tp.editor.options.columns.length;
 	const num_selected_rows = tp.helpers.selection.rows.length;
 	const num_selected_columns = tp.helpers.selection.columns.length;
-	const key = ( window?.navigator?.platform?.includes( 'Mac' ) ) ?
+	const is_mac = window?.navigator?.platform?.includes( 'Mac' );
+	const meta_key = is_mac ?
 		_x( '⌘', 'keyboard shortcut modifier key on a Mac keyboard', 'tablepress' ) :
 		_x( 'Ctrl+', 'keyboard shortcut modifier key on a non-Mac keyboard', 'tablepress' );
+	const option_key = is_mac ?
+		_x( '⌥', 'keyboard shortcut option key on a Mac keyboard', 'tablepress' ) :
+		_x( 'Alt+', 'keyboard shortcut Alt key on a non-Mac keyboard', 'tablepress' );
 
 	// Call-by-reference object for the cell_merge_allowed() call.
 	const error_message = {
@@ -44,14 +48,13 @@ export default function contextMenu( obj /*, x, y, e */ ) {
 		// Undo/Redo.
 		{
 			title: __( 'Undo', 'tablepress' ),
-			shortcut: sprintf( __( '%1$sZ', 'keyboard shortcut for Undo', 'tablepress' ), key ),
+			shortcut: sprintf( _x( '%1$sZ', 'keyboard shortcut for Undo', 'tablepress' ), meta_key ),
 			onclick: obj.undo,
 			disabled: ( -1 === obj.historyIndex ),
-			tooltip: ( -1 === obj.historyIndex ),
 		},
 		{
 			title: __( 'Redo', 'tablepress' ),
-			shortcut: sprintf( __( '%1$sY', 'keyboard shortcut for Redo', 'tablepress' ), key ),
+			shortcut: sprintf( _x( '%1$sY', 'keyboard shortcut for Redo', 'tablepress' ), meta_key ),
 			onclick: obj.redo,
 			disabled: ( obj.historyIndex === obj.history.length - 1 ),
 		},
@@ -62,32 +65,57 @@ export default function contextMenu( obj /*, x, y, e */ ) {
 		},
 		{
 			title: __( 'Cut', 'tablepress' ),
-			shortcut: sprintf( __( '%1$sX', 'keyboard shortcut for Cut', 'tablepress' ), key ),
+			shortcut: sprintf( _x( '%1$sX', 'keyboard shortcut for Cut', 'tablepress' ), meta_key ),
 			onclick() {
-				obj.copy( true ); // Copy highlighted cells.
-				obj.setValue( obj.highlighted, '' );
+				/* eslint-disable @wordpress/no-global-active-element */
+				if ( 'TEXTAREA' === document.activeElement.tagName && document.activeElement.selectionStart !== document.activeElement.selectionEnd ) {
+					document.execCommand( 'copy' ); // If text is selected in the actively edited cell, only copy that.
+					const cursorPosition = document.activeElement.selectionStart;
+					document.activeElement.value = document.activeElement.value.slice( 0, document.activeElement.selectionStart ) + document.activeElement.value.slice( document.activeElement.selectionEnd ); // Cut the selected content.
+					document.activeElement.selectionEnd = cursorPosition;
+				} else {
+					obj.copy( true ); // Otherwise, copy highlighted cells.
+					obj.setValue( obj.highlighted, '' ); // Make cell content empty.
+				}
+				/* eslint-enable @wordpress/no-global-active-element */
 			},
 		},
 		{
 			title: __( 'Copy', 'tablepress' ),
-			shortcut: sprintf( __( '%1$sC', 'keyboard shortcut for Copy', 'tablepress' ), key ),
+			shortcut: sprintf( _x( '%1$sC', 'keyboard shortcut for Copy', 'tablepress' ), meta_key ),
 			onclick() {
-				obj.copy( true ); // Copy highlighted cells.
+				if ( 'TEXTAREA' === document.activeElement.tagName && document.activeElement.selectionStart !== document.activeElement.selectionEnd ) { // eslint-disable-line @wordpress/no-global-active-element
+					document.execCommand( 'copy' ); // If text is selected in the actively edited cell, only copy that.
+				} else {
+					obj.copy( true ); // Otherwise, copy highlighted cells.
+				}
 			},
 		},
 		{
 			title: __( 'Paste', 'tablepress' ),
-			shortcut: sprintf( __( '%1$sV', 'keyboard shortcut for Paste', 'tablepress' ), key ),
+			shortcut: sprintf( _x( '%1$sV', 'keyboard shortcut for Paste', 'tablepress' ), meta_key ),
 			onclick() {
-				if ( obj.selectedCell ) {
+				/* eslint-disable @wordpress/no-global-active-element */
+				if ( 'TEXTAREA' === document.activeElement.tagName ) {
+					window.navigator.clipboard.readText().then( ( text ) => {
+						if ( text ) {
+							const cursorPosition = document.activeElement.selectionStart + text.length;
+							document.activeElement.value = document.activeElement.value.slice( 0, document.activeElement.selectionStart ) + text + document.activeElement.value.slice( document.activeElement.selectionEnd ); // Paste at the selection.
+							document.activeElement.selectionEnd = cursorPosition;
+						}
+					} );
+				} else if ( obj.selectedCell ) {
 					window.navigator.clipboard.readText().then( ( text ) => {
 						if ( text ) {
 							obj.paste( obj.selectedCell[0], obj.selectedCell[1], text );
 						}
 					} );
 				}
+				/* eslint-enable @wordpress/no-global-active-element */
 			},
-			disabled: ! window?.navigator?.clipboard,
+			// Firefox does not offer the readText() method, so "Paste" needs to be disabled.
+			disabled: ! window?.navigator?.clipboard?.readText,
+			tooltip: ! window?.navigator?.clipboard?.readText ? __( 'Your browser does not allow pasting via the context menu. Use the keyboard shortcut instead.', 'tablepress' ) : '',
 		},
 
 		// Insert Link, Insert Image, Open Advanced Editor.
@@ -96,15 +124,18 @@ export default function contextMenu( obj /*, x, y, e */ ) {
 		},
 		{
 			title: __( 'Insert Link', 'tablepress' ),
-			onclick: tp.callbacks.insert_link.open_dialog,
+			shortcut: sprintf( _x( '%1$sL', 'keyboard shortcut for Insert Link', 'tablepress' ), meta_key ),
+			onclick: tp.callbacks.insert_link.open_dialog.bind( null, ( 'TEXTAREA' === document.activeElement.tagName ) ? document.activeElement : null ), // eslint-disable-line @wordpress/no-global-active-element
 		},
 		{
 			title: __( 'Insert Image', 'tablepress' ),
-			onclick: tp.callbacks.insert_image.open_dialog,
+			shortcut: sprintf( _x( '%1$sI', 'keyboard shortcut for Insert Image', 'tablepress' ), meta_key ),
+			onclick: tp.callbacks.insert_image.open_dialog.bind( null, ( 'TEXTAREA' === document.activeElement.tagName ) ? document.activeElement : null ), // eslint-disable-line @wordpress/no-global-active-element
 		},
 		{
 			title: __( 'Advanced Editor', 'tablepress' ),
-			onclick: tp.callbacks.advanced_editor.open_dialog,
+			shortcut: sprintf( _x( '%1$sE', 'keyboard shortcut for Advanced Editor', 'tablepress' ), meta_key ),
+			onclick: tp.callbacks.advanced_editor.open_dialog.bind( null, ( 'TEXTAREA' === document.activeElement.tagName ) ? document.activeElement : null ), // eslint-disable-line @wordpress/no-global-active-element
 		},
 
 		// Duplicate/Insert/Append/Delete.
@@ -185,23 +216,54 @@ export default function contextMenu( obj /*, x, y, e */ ) {
 			submenu: [
 				{
 					title: _n( 'Move row up', 'Move rows up', num_selected_rows, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s⇧↑', 'keyboard shortcut for Move up', 'tablepress' ), meta_key ),
 					onclick: tp.callbacks.move.bind( null, 'up', 'rows' ),
 					disabled: ! tp.helpers.move_allowed( 'rows', 'up' ),
 				},
 				{
 					title: _n( 'Move row down', 'Move rows down', num_selected_rows, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s⇧↓', 'keyboard shortcut for Move down', 'tablepress' ), meta_key ),
 					onclick: tp.callbacks.move.bind( null, 'down', 'rows' ),
 					disabled: ! tp.helpers.move_allowed( 'rows', 'down' ),
 				},
 				{
 					title: _n( 'Move column left', 'Move columns left', num_selected_columns, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s⇧←', 'keyboard shortcut for Move left', 'tablepress' ), meta_key ),
 					onclick: tp.callbacks.move.bind( null, 'left', 'columns' ),
 					disabled: ! tp.helpers.move_allowed( 'columns', 'left' ),
 				},
 				{
 					title: _n( 'Move column right', 'Move columns right', num_selected_columns, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s⇧→', 'keyboard shortcut for Move right', 'tablepress' ), meta_key ),
 					onclick: tp.callbacks.move.bind( null, 'right', 'columns' ),
 					disabled: ! tp.helpers.move_allowed( 'columns', 'right' ),
+				},
+				{
+					type: 'divisor',
+				},
+				{
+					title: _n( 'Move row to the top', 'Move rows to the top', num_selected_rows, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s%2$s⇧↑', 'keyboard shortcut for Move to the top', 'tablepress' ), meta_key, option_key ),
+					onclick: tp.callbacks.move.bind( null, 'top', 'rows' ),
+					disabled: ! tp.helpers.move_allowed( 'rows', 'top' ),
+				},
+				{
+					title: _n( 'Move row to the bottom', 'Move rows to the bottom', num_selected_rows, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s%2$s⇧↓', 'keyboard shortcut for Move to the bottom', 'tablepress' ), meta_key, option_key ),
+					onclick: tp.callbacks.move.bind( null, 'bottom', 'rows' ),
+					disabled: ! tp.helpers.move_allowed( 'rows', 'bottom' ),
+				},
+				{
+					title: _n( 'Move column to first', 'Move columns to first', num_selected_columns, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s%2$s⇧←', 'keyboard shortcut for Move to first', 'tablepress' ), meta_key, option_key ),
+					onclick: tp.callbacks.move.bind( null, 'first', 'columns' ),
+					disabled: ! tp.helpers.move_allowed( 'columns', 'first' ),
+				},
+				{
+					title: _n( 'Move column to last', 'Move columns to last', num_selected_columns, 'tablepress' ),
+					shortcut: sprintf( _x( '%1$s%2$s⇧→', 'keyboard shortcut for Move to last', 'tablepress' ), meta_key, option_key ),
+					onclick: tp.callbacks.move.bind( null, 'last', 'columns' ),
+					disabled: ! tp.helpers.move_allowed( 'columns', 'last' ),
 				},
 			],
 		},

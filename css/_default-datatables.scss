@@ -70,8 +70,9 @@ $position: "after" !default;
 	float: $align-side-opposite;
 	white-space: nowrap;
 
-	input {
+	label input {
 		margin-#{$align-side}: 0.5em;
+		margin-#{$align-side-opposite}: 0;
 	}
 }
 
@@ -166,14 +167,18 @@ $position: "after" !default;
 	}
 }
 
-/* Processing indicator */
-.dataTables_processing {
-	display: none; /* always hidden, we don't use it */
-}
-
 /* Scrolling */
 .dataTables_scroll {
 	clear: both;
+
+	/* Fix for wrong alignment and width. */
+	.tablepress {
+		width: 100% !important;
+	}
+}
+/* Ensure that the table head row doesn't get a margin from some themes. */
+.dataTables_scrollHead table.tablepress {
+	margin: 0;
 }
 .dataTables_scrollBody {
 	-webkit-overflow-scrolling: touch;

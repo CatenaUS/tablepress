@@ -4,8 +4,9 @@ namespace TablePress\PhpOffice\PhpSpreadsheet\Calculation\Internal;
 
 class MakeMatrix
 {
-    public static function make(...$args): array
-    {
-        return $args;
-    }
+	/** @param array $args */
+	public static function make(...$args): array
+	{
+		return $args;
+	}
 }

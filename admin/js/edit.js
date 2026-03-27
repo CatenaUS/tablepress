@@ -13,7 +13,7 @@
 /**
  * WordPress dependencies.
  */
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _x, sprintf } from '@wordpress/i18n';
 import { doAction as do_action, applyFilters as apply_filters } from '@wordpress/hooks';
 import { buildQueryString } from '@wordpress/url';
 
@@ -148,7 +148,7 @@ tp.helpers.options.change = function ( event ) {
 	if ( 'use_datatables' === option_name && tp.table.options.use_datatables && tp.helpers.editor.has_merged_cells() ) {
 		tp.table.options.use_datatables = false;
 		$( '#option-use_datatables' ).checked = false;
-		window.alert( __( 'You can not enable the JavaScript features, because your table contains combined/merged cells.', 'tablepress' ) );
+		window.alert( __( 'You can not enable the Table Features for Site Visitors, because your table contains combined/merged cells.', 'tablepress' ) );
 	}
 
 	do_action( 'tablepress.optionsChange', option_name, property, event );
@@ -169,7 +169,7 @@ tp.helpers.options.check_dependencies = function () {
 	$( '#option-print_description_position' ).disabled = ! tp.table.options.print_description;
 
 	const js_features_enabled = ( tp.table.options.use_datatables && tp.table.options.table_head );
-	$( '#tablepress_edit-datatables-features' ).querySelectorAll( 'input:not(#option-use_datatables), textarea' ).forEach( ( $field ) => ( $field.disabled = ! js_features_enabled ) );
+	$( '#tablepress_edit-datatables-features' ).querySelectorAll( ':scope input:not(#option-use_datatables), :scope textarea' ).forEach( ( $field ) => ( $field.disabled = ! js_features_enabled ) );
 
 	const pagination_enabled = ( js_features_enabled && tp.table.options.datatables_paginate );
 	$( '#option-datatables_lengthchange' ).disabled = ! pagination_enabled;
@@ -283,15 +283,15 @@ tp.helpers.visibility.selection_contains = function ( type, visibility ) {
  * @return {boolean} Whether the move is allowed or not.
  */
 tp.helpers.move_allowed = function ( type, direction ) {
-	// When moving up or left, test the first row/column of the selected range.
+	// When moving up or left, or to top or first, test the first row/column of the selected range.
 	let roc_to_test = tp.helpers.selection[ type ][0];
 	let min_max_roc = 0; // First row/column.
-	// When moving down or right, test the last row/column of the selected range.
-	if ( 'down' === direction || 'right' === direction ) {
+	// When moving down or right, or bottom or last, test the last row/column of the selected range.
+	if ( 'down' === direction || 'right' === direction || 'bottom' === direction || 'last' === direction ) {
 		roc_to_test = tp.helpers.selection[ type ][ tp.helpers.selection[ type ].length - 1 ];
 		min_max_roc = ( 'rows' === type ) ? tp.editor.options.data.length - 1 : tp.editor.options.columns.length - 1;
 	}
-	// Moving beyond the first/last row/column is disallowed.
+	// Moving is disallowed if the first/last row/column is already at the target edge.
 	if ( min_max_roc === roc_to_test ) {
 		return false;
 	}
@@ -311,8 +311,8 @@ tp.helpers.cell_merge_allowed = function ( errors, error_message = {} ) {
 
 	// If the "Table Head Row" and Enable Visitor Features" options are enabled, disable merging cells.
 	if ( tp.table.options.table_head && tp.table.options.use_datatables ) {
-		error_message.text = sprintf( __( 'You can not combine these cells, because the “%1$s” checkbox in the “%2$s” section is checked.', 'tablepress' ), __( 'Enable Visitor Features', 'tablepress' ), __( 'Table Features for Visitors', 'tablepress' ) ) +
-				' ' + __( 'These JavaScript features are not compatible with merged cells.', 'tablepress' );
+		error_message.text = sprintf( __( 'You can not combine these cells, because the “%1$s” checkbox in the “%2$s” section is checked.', 'tablepress' ), __( 'Enable Visitor Features', 'tablepress' ), __( 'Table Features for Site Visitors', 'tablepress' ) ) +
+				' ' + __( 'The Table Features for Site Visitors are not compatible with merged cells.', 'tablepress' );
 		if ( alert_on_error ) {
 			window.alert( error_message.text );
 		}
@@ -444,7 +444,7 @@ tp.callbacks.editor.onupdatetable = function ( instance, cell, col_idx, row_idx,
 
 		// After processing the last row, potentially add classes to the head and foot rows.
 		if ( row_idx === instance.jspreadsheet.rows.length - 1 ) {
-			const visible_rows = instance.jspreadsheet.content.querySelectorAll( 'tbody tr:not(.row-hidden)' );
+			const visible_rows = instance.jspreadsheet.content.querySelectorAll( ':scope tbody tr:not(.row-hidden)' );
 			// Designating a head and a foot row only makes sense for tables with more than one row. Single-row tables will only have a table body.
 			if ( 1 < visible_rows.length ) {
 				if ( tp.table.options.table_head ) {
@@ -556,9 +556,19 @@ tp.callbacks.insert_link = {};
 
 /**
  * Open the wpLink dialog for inserting links.
+ *
+ * @param {HTMLElement|null} $active_textarea Active textarea of the table editor or null.
  */
-tp.callbacks.insert_link.open_dialog = function () {
-	$( '#textarea-insert-helper' ).value = tp.editor.options.data[ tp.helpers.selection.rows[0] ][ tp.helpers.selection.columns[0] ];
+tp.callbacks.insert_link.open_dialog = function ( $active_textarea = null ) {
+	const $helper_textarea = $( '#textarea-insert-helper' );
+	$helper_textarea.value = tp.editor.options.data[ tp.helpers.selection.rows[0] ][ tp.helpers.selection.columns[0] ];
+	if ( $active_textarea ) {
+		$helper_textarea.selectionStart = $active_textarea.selectionStart;
+		$helper_textarea.selectionEnd = $active_textarea.selectionEnd;
+	} else {
+		$helper_textarea.selectionStart = $helper_textarea.value.length;
+		$helper_textarea.selectionEnd = $helper_textarea.value.length;
+	}
 	const cell_name = jexcel.getColumnNameFromId( [ tp.helpers.selection.columns[0], tp.helpers.selection.rows[0] ] );
 	$( '#link-modal-title' ).textContent = sprintf( __( 'Insert Link into cell %1$s', 'tablepress' ), cell_name );
 	wpLink.open( 'textarea-insert-helper' );
@@ -569,9 +579,19 @@ tp.callbacks.insert_image = {};
 
 /**
  * Open the WP Media library for inserting images.
+ *
+ * @param {HTMLElement|null} $active_textarea Active textarea of the table editor or null.
  */
-tp.callbacks.insert_image.open_dialog = function () {
-	$( '#textarea-insert-helper' ).value = tp.editor.options.data[ tp.helpers.selection.rows[0] ][ tp.helpers.selection.columns[0] ];
+tp.callbacks.insert_image.open_dialog = function ( $active_textarea = null ) {
+	const $helper_textarea = $( '#textarea-insert-helper' );
+	$helper_textarea.value = tp.editor.options.data[ tp.helpers.selection.rows[0] ][ tp.helpers.selection.columns[0] ];
+	if ( $active_textarea ) {
+		$helper_textarea.selectionStart = $active_textarea.selectionStart;
+		$helper_textarea.selectionEnd = $active_textarea.selectionEnd;
+	} else {
+		$helper_textarea.selectionStart = $helper_textarea.value.length;
+		$helper_textarea.selectionEnd = $helper_textarea.value.length;
+	}
 	wp.media.editor.open( 'textarea-insert-helper', {
 		frame: 'post',
 		state: 'insert',
@@ -589,8 +609,10 @@ tp.callbacks.advanced_editor.$textarea = $( '#advanced-editor-content' );
 
 /**
  * Open the wpdialog for the Advanced Editor.
+ *
+ * @param {HTMLElement|null} $active_textarea Active textarea of the table editor or null.
  */
-tp.callbacks.advanced_editor.open_dialog = function () {
+tp.callbacks.advanced_editor.open_dialog = function ( $active_textarea = null ) {
 	tp.callbacks.advanced_editor.$textarea.value = tp.editor.options.data[ tp.helpers.selection.rows[0] ][ tp.helpers.selection.columns[0] ];
 
 	const cell_name = jexcel.getColumnNameFromId( [ tp.helpers.selection.columns[0], tp.helpers.selection.rows[0] ] );
@@ -621,6 +643,13 @@ tp.callbacks.advanced_editor.open_dialog = function () {
 	} );
 
 	jexcel.current = null; // This is necessary to prevent problems with the focus and cells being emptied when the Advanced Editor is called from the context menu.
+	if ( $active_textarea ) {
+		tp.callbacks.advanced_editor.$textarea.selectionStart = $active_textarea.selectionStart;
+		tp.callbacks.advanced_editor.$textarea.selectionEnd = $active_textarea.selectionEnd;
+	} else {
+		tp.callbacks.advanced_editor.$textarea.selectionStart = tp.callbacks.advanced_editor.$textarea.value.length;
+		tp.callbacks.advanced_editor.$textarea.selectionEnd = tp.callbacks.advanced_editor.$textarea.value.length;
+	}
 	tp.callbacks.advanced_editor.$textarea.focus();
 };
 
@@ -660,6 +689,9 @@ tp.callbacks.help_box.open_dialog = function ( event ) {
 				},
 			},
 		],
+		open( /* event, ui */ ) {
+			jQuery( this ).next().find( '.button-ok' ).trigger( 'focus' );
+		},
 	} );
 };
 
@@ -674,13 +706,18 @@ tp.callbacks.table_preview.process = function ( event ) {
 	// Never follow the link of the Preview button, everything is handled with JS.
 	event.preventDefault();
 
+	let table_name = $( '#table-name' ).value;
+	if ( '' === table_name.trim() ) {
+		table_name = __( '(no name)', 'tablepress' );
+	}
+
 	// Initialize the Table Preview wpdialog.
 	tp.callbacks.table_preview.$dialog = jQuery( '#table-preview' ).wpdialog( {
 		autoOpen: false,
 		width: window.innerWidth - 80,
 		height: window.innerHeight - 80,
 		modal: true,
-		title: sprintf( __( 'Preview of table “%1$s” (ID %2$s)', 'tablepress' ), $( '#table-name' ).value, tp.table.id ),
+		title: sprintf( __( 'Preview of table “%1$s” (ID %2$s)', 'tablepress' ), table_name, tp.table.id ),
 		closeOnEscape: true,
 		buttons: [
 			{
@@ -726,9 +763,9 @@ tp.callbacks.table_preview.process = function ( event ) {
 		},
 	};
 
+	// Add spinner, disable "Preview" buttons, and change cursor.
 	event.target.parentNode.insertAdjacentHTML( 'beforeend', `<span id="spinner-table-preview" class="spinner-table-preview spinner is-active" title="${ __( 'The Table Preview is being loaded …', 'tablepress' ) }"/>` );
 	$( '.button-show-preview' ).forEach( ( button ) => button.classList.add( 'disabled' ) );
-
 	document.body.classList.add( 'wait' );
 
 	// Load the table preview data from the server via an AJAX request.
@@ -760,7 +797,12 @@ tp.callbacks.table_preview.process = function ( event ) {
 		tp.callbacks.table_preview.success( data );
 	} )
 	// Handle errors.
-	.catch( ( error ) => tp.callbacks.table_preview.error( error.message ) );
+	.catch( ( error ) => tp.callbacks.table_preview.error( error.message ) )
+	.finally( () => {
+		$( '#spinner-table-preview' ).remove();
+		$( '.button-show-preview' ).forEach( ( button ) => button.classList.remove( 'disabled' ) );
+		document.body.classList.remove( 'wait' );
+	} );
 };
 
 /**
@@ -772,10 +814,6 @@ tp.callbacks.table_preview.success = function ( data ) {
 	const $iframe = $( '#table-preview-iframe' );
 	$iframe.src = '';
 	$iframe.srcdoc = `<!DOCTYPE html><html><head>${ data.head_html }</head><body>${ data.body_html }</body></html>`;
-
-	$( '#spinner-table-preview' ).remove();
-	$( '.button-show-preview' ).forEach( ( button ) => button.classList.remove( 'disabled' ) );
-	document.body.classList.remove( 'wait' );
 
 	tp.callbacks.table_preview.$dialog.wpdialog( 'open' );
 };
@@ -789,17 +827,12 @@ tp.callbacks.table_preview.error = function ( message ) {
 	message = __( 'Attention: Unfortunately, an error occurred.', 'tablepress' ) + ' ' + message;
 	const div_id = `show-preview-${ Date.now() }`;
 
-	const $spinner = $( '#spinner-table-preview' );
-	$spinner.parentNode.insertAdjacentHTML( 'afterend', `<div id="${ div_id }" class="ajax-alert notice notice-error"><p>${ message }</p></div>` );
-	$spinner.remove();
+	$( '#spinner-table-preview' ).parentNode.insertAdjacentHTML( 'afterend', `<div id="${ div_id }" class="ajax-alert notice notice-error"><p>${ message }</p></div>` );
 
 	const $notice = $( `#${ div_id }` );
 	void $notice.offsetWidth; // Trick browser layout engine. Necessary to make CSS transition work.
 	$notice.style.opacity = 0;
 	$notice.addEventListener( 'transitionend', () => $notice.remove() );
-
-	$( '.button-show-preview' ).forEach( ( button ) => button.classList.remove( 'disabled' ) );
-	document.body.classList.remove( 'wait' );
 };
 
 tp.callbacks.save_changes = {};
@@ -837,9 +870,9 @@ tp.callbacks.save_changes.process = function ( event ) {
 		},
 	};
 
+	// Add spinner, disable "Save Changes" buttons, and change cursor.
 	event.target.parentNode.insertAdjacentHTML( 'beforeend', `<span id="spinner-save-changes" class="spinner-save-changes spinner is-active" title="${ __( 'Changes are being saved …', 'tablepress' ) }"/>` );
 	$( '.button-save-changes' ).forEach( ( button ) => ( button.disabled = true ) );
-
 	document.body.classList.add( 'wait' );
 
 	// Save the table data to the server via an AJAX request.
@@ -865,14 +898,20 @@ tp.callbacks.save_changes.process = function ( event ) {
 		}
 
 		if ( true !== data.success ) {
-			const debug_html = data.error_details ? `</p><p>These errors were encountered:</p><pre>${ data.error_details }</pre><p>` : '';
+			const error_introduction = __( 'These errors were encountered:', 'tablepress' );
+			const debug_html = data.error_details ? `</p><p>${ error_introduction }</p><pre>${ data.error_details }</pre><p>` : '';
 			throw new Error( `The table could not be saved to the database properly.${ debug_html }` );
 		}
 
 		tp.callbacks.save_changes.success( data );
 	} )
 	// Handle errors.
-	.catch( ( error ) => tp.callbacks.save_changes.error( error.message ) );
+	.catch( ( error ) => tp.callbacks.save_changes.error( error.message ) )
+	.finally( () => {
+		$( '#spinner-save-changes' ).remove();
+		$( '.button-save-changes' ).forEach( ( button ) => ( button.disabled = false ) );
+		document.body.classList.remove( 'wait' );
+	} );
 };
 
 /**
@@ -891,6 +930,10 @@ tp.callbacks.save_changes.success = function ( data ) {
 	tp.table.id = data.table_id;
 	tp.table.new_id = data.table_id;
 	$( '#table-id' ).value = data.table_id;
+	const $shortcode_field = $( '#table-information-shortcode' );
+	if ( $shortcode_field ) {
+		$shortcode_field.value = `[${ tp.table.shortcode } id=${ data.table_id } /]`;
+	}
 
 	// Update the nonces.
 	tp.nonces.edit_table = data.new_edit_nonce;
@@ -909,12 +952,16 @@ tp.callbacks.save_changes.success = function ( data ) {
 
 	tp.helpers.unsaved_changes.unset();
 
-	const action_messages = {
-		success_save:                   __( 'The table was saved successfully.', 'tablepress' ),
-		error_save:                     __( 'Attention: Unfortunately, an error occurred.', 'tablepress' ) + ' ' + __( 'The table could not be saved.', 'tablepress' ),
-		success_save_success_id_change: __( 'The table was saved successfully, and the table ID was changed.', 'tablepress' ),
-		success_save_error_id_change:   __( 'The table was saved successfully, but the table ID could not be changed!', 'tablepress' ),
-	};
+	const action_messages = {};
+	action_messages.success_save = __( 'The table was saved successfully.', 'tablepress' );
+	action_messages.success_save_success_id_change = action_messages.success_save + ' ' + __( 'The table ID was changed.', 'tablepress' );
+	action_messages.success_save_error_id_change = action_messages.success_save + ' ' + __( 'The table ID could not be changed, probably because the new ID is already in use!', 'tablepress' );
+
+	if ( 'success_save_error_id_change' === data.message && data.error_details ) {
+		const error_introduction = __( 'These errors were encountered:', 'tablepress' );
+		action_messages.success_save_error_id_change += `</p><p>${ error_introduction }</p><pre>${ data.error_details }</pre><p>`;
+	}
+
 	const type = ( data.message.includes( 'error' ) ) ? 'error' : 'success';
 	tp.callbacks.save_changes.after_saving_notice( type, action_messages[ data.message ] );
 };
@@ -938,18 +985,97 @@ tp.callbacks.save_changes.error = function ( message ) {
 tp.callbacks.save_changes.after_saving_notice = function ( type, message ) {
 	const div_id = `save-changes-${ Date.now() }`;
 
-	const $spinner = $( '#spinner-save-changes' );
-	$spinner.parentNode.insertAdjacentHTML( 'afterend', `<div id="${ div_id }" class="ajax-alert notice notice-${ type }"><p>${ message }</p></div>` );
-	$spinner.remove();
+	$( '#spinner-save-changes' ).parentNode.insertAdjacentHTML( 'afterend', `<div id="${ div_id }" class="ajax-alert notice notice-${ type }"><p>${ message }</p></div>` );
 
 	const $notice = $( `#${ div_id }` );
 	void $notice.offsetWidth; // Trick browser layout engine. Necessary to make CSS transition work.
 	$notice.style.opacity = 0;
 	$notice.addEventListener( 'transitionend', () => $notice.remove() );
+};
 
-	$( '.button-save-changes' ).forEach( ( button ) => ( button.disabled = false ) );
+tp.callbacks.screen_options = {};
 
-	document.body.classList.remove( 'wait' );
+/**
+ * Updates table editor layout with new screen option values.
+ *
+ * @param {Event} event `input` event of the screen options fields.
+ */
+tp.callbacks.screen_options.update = function ( event ) {
+	if ( ! event.target ) {
+		return;
+	}
+
+	if ( 'table_editor_line_clamp' === event.target.id ) {
+		tp.editor.el.style.setProperty( '--table-editor-line-clamp', parseInt( event.target.value, 10 ) );
+		tp.editor.updateCornerPosition();
+		return;
+	}
+
+	if ( 'table_editor_column_width' === event.target.id ) {
+		tp.screen_options.table_editor_column_width = parseInt( event.target.value, 10 );
+		tp.screen_options.table_editor_column_width = Math.max( tp.screen_options.table_editor_column_width, 30 ); // Ensure a minimum column width of 30 pixesl.
+		tp.screen_options.table_editor_column_width = Math.min( tp.screen_options.table_editor_column_width, 9999 ); // Ensure a maximum column width of 9999 pixesl.
+		tp.editor.colgroup.forEach( ( col ) => col.setAttribute( 'width', tp.screen_options.table_editor_column_width ) );
+		tp.editor.updateCornerPosition();
+		return;
+	}
+};
+
+/**
+ * Designates a screen option field to have been changed, so that the value is sent to the server when it is blurred.
+ *
+ * @param {Event} event `change` event of the screen options fields.
+ */
+tp.callbacks.screen_options.set_was_changed = function ( event ) {
+	if ( ! event.target ) {
+		return;
+	}
+
+	event.target.was_changed = true;
+};
+
+/**
+ * Saves screen options to the server after they have been changed and the field is blurred.
+ *
+ * @param {Event} event `blur` event of the screen options fields.
+ */
+tp.callbacks.screen_options.save = function ( event ) {
+	if ( ! event.target ) {
+		return;
+	}
+
+	if ( ! event.target.was_changed ) {
+		return;
+	}
+
+	event.target.was_changed = false;
+
+	// Prepare the data for the AJAX request.
+	const request_data = {
+		action: 'tablepress_save_screen_options',
+		_ajax_nonce: tp.nonces.screen_options,
+		tablepress: {
+			[ event.target.id ]: parseInt( event.target.value, 10 ),
+		},
+	};
+
+	// Add spinner and change cursor.
+	event.target.parentNode.insertAdjacentHTML( 'beforeend', `<span id="spinner-save-changes" class="spinner-save-changes spinner is-active" title="${ __( 'Changes are being saved …', 'tablepress' ) }"/>` );
+	document.body.classList.add( 'wait' );
+
+	// Save the table data to the server via an AJAX request.
+	fetch( ajaxurl, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/x-www-form-urlencoded',
+			Accept: 'application/json',
+		},
+		body: buildQueryString( request_data ),
+	} )
+	.finally( () => {
+		$( '#spinner-save-changes' ).remove();
+		document.body.classList.remove( 'wait' );
+	} );
 };
 
 tp.callbacks.table_id = tp.callbacks.table_id || {};
@@ -974,13 +1100,19 @@ tp.callbacks.table_id.change = function () {
 		return;
 	}
 
-	if ( ! window.confirm( __( 'Do you really want to change the Table ID? All blocks for this table in your pages and posts will have to be adjusted!', 'tablepress' ) ) ) {
+	if ( ! window.confirm( __( 'Do you really want to change the Table ID? All blocks and Shortcodes for this table in your posts and pages will have to be adjusted!', 'tablepress' ) ) ) {
 		this.value = tp.table.new_id;
 		return;
 	}
 
 	// Set the new table ID.
 	tp.table.new_id = this.value;
+	const $shortcode_field = $( '#table-information-shortcode' );
+	if ( $shortcode_field ) {
+		$shortcode_field.value = `[${ tp.table.shortcode } id=${ tp.table.new_id } /]`;
+		$shortcode_field.focus();
+		$shortcode_field.select();
+	}
 	tp.helpers.unsaved_changes.set();
 };
 
@@ -1068,8 +1200,8 @@ tp.callbacks.append = function ( type, num_rocs ) {
 /**
  * Moves currently selected rows or columns.
  *
- * @param {string} direction Where to move the selected rows or columns (for rows: "up"/"down", for columns: "left"/right").
- * @param {string} type      What to append ("rows" or "columns").
+ * @param {string} direction Where to move the selected rows or columns (for rows: "up"/"down"/"top"/"bottom", for columns: "left"/right"/"first"/"last").
+ * @param {string} type      What to move ("rows" or "columns").
  */
 tp.callbacks.move = function ( direction, type ) {
 	const handling_rows = ( 'rows' === type );
@@ -1081,7 +1213,19 @@ tp.callbacks.move = function ( direction, type ) {
 	if ( 'down' === direction || 'right' === direction ) {
 		rocs = rocs.slice().reverse(); // When moving down or right, reverse the order, to start with the last row/column of the selected range. slice() is needed here to create an array copy.
 		position_difference = 1; // New row/column number is one higher than current row/column number.
+	} else if ( 'top' === direction || 'first' === direction ) {
+		position_difference = -rocs[0];
+	} else if ( 'bottom' === direction || 'last' === direction ) {
+		rocs = rocs.slice().reverse(); // When moving down or right, reverse the order, to start with the last row/column of the selected range. slice() is needed here to create an array copy.
+		const min_max_roc = ( 'rows' === type ) ? tp.editor.options.data.length - 1 : tp.editor.options.columns.length - 1;
+		position_difference = min_max_roc - rocs[0];
 	}
+
+	// Bail early if there is nothing to do (e.g. when the selected range is already at the target edge).
+	if ( 0 === position_difference ) {
+		return;
+	}
+
 	// Move the selected rows/columns individually.
 	const move_function = handling_rows ? tp.editor.moveRow : tp.editor.moveColumn;
 	rocs.forEach( ( roc_idx ) => move_function( roc_idx, roc_idx + position_difference ) );
@@ -1152,6 +1296,111 @@ tp.callbacks.merge_cells = function () {
 	tp.helpers.unsaved_changes.set();
 };
 
+/**
+ * Registers keyboard events and triggers corresponding actions by emulating button clicks.
+ *
+ * @param {Event} event Keyboard event.
+ */
+tp.callbacks.keyboard_shortcuts = function ( event ) {
+	let action = '';
+	let move_direction = '';
+	let move_type = '';
+
+	if ( event.ctrlKey || event.metaKey ) {
+		if ( 80 === event.keyCode ) {
+			// Preview: Ctrl/Cmd + P.
+			action = 'show-preview';
+		} else if ( 83 === event.keyCode ) {
+			// Save Changes: Ctrl/Cmd + S.
+			action = 'save-changes';
+		} else if ( 76 === event.keyCode ) {
+			// Insert Link: Ctrl/Cmd + L.
+			action = 'insert_link';
+		} else if ( 73 === event.keyCode ) {
+			// Insert Image: Ctrl/Cmd + I.
+			action = 'insert_image';
+		} else if ( 69 === event.keyCode ) {
+			// Advanced Editor: Ctrl/Cmd + E.
+			action = 'advanced_editor';
+		} else if ( event.shiftKey && event.altKey && 38 === event.keyCode ) {
+			// Move up: Ctrl/Cmd + Alt/Option + Shift + ↑.
+			action = 'move';
+			move_direction = 'top';
+			move_type = 'rows';
+		} else if ( event.shiftKey && event.altKey && 40 === event.keyCode ) {
+			// Move down: Ctrl/Cmd + Alt/Option + Shift + ↓.
+			action = 'move';
+			move_direction = 'bottom';
+			move_type = 'rows';
+		} else if ( event.shiftKey && event.altKey && 37 === event.keyCode ) {
+			// Move left: Ctrl/Cmd + Alt/Option + Shift + ←.
+			action = 'move';
+			move_direction = 'first';
+			move_type = 'columns';
+		} else if ( event.shiftKey && event.altKey && 39 === event.keyCode ) {
+			// Move r: Ctrl/Cmd + Alt/Option + Shift + →.
+			action = 'move';
+			move_direction = 'last';
+			move_type = 'columns';
+		} else if ( event.shiftKey && 38 === event.keyCode ) {
+			// Move up: Ctrl/Cmd + Shift + ↑.
+			action = 'move';
+			move_direction = 'up';
+			move_type = 'rows';
+		} else if ( event.shiftKey && 40 === event.keyCode ) {
+			// Move down: Ctrl/Cmd + Shift + ↓.
+			action = 'move';
+			move_direction = 'down';
+			move_type = 'rows';
+		} else if ( event.shiftKey && 37 === event.keyCode ) {
+			// Move left: Ctrl/Cmd + Shift + ←.
+			action = 'move';
+			move_direction = 'left';
+			move_type = 'columns';
+		} else if ( event.shiftKey && 39 === event.keyCode ) {
+			// Move r: Ctrl/Cmd + Shift + →.
+			action = 'move';
+			move_direction = 'right';
+			move_type = 'columns';
+		}
+	}
+
+	if ( 'save-changes' === action || 'show-preview' === action ) {
+		// Blur the focussed element to make sure that all change events were triggered.
+		document.activeElement.blur(); // eslint-disable-line @wordpress/no-global-active-element
+
+		/*
+		 * Emulate a click on the button corresponding to the action.
+		 * This way, things like notices will be shown, compared to directly calling the buttons' callbacks.
+		 */
+		document.querySelector( `#tablepress_edit-buttons-2-submit .button-${ action }` ).click();
+
+		// Prevent the browser's native handling of the shortcut, i.e. showing the Save or Print dialogs.
+		event.preventDefault();
+	} else if ( 'insert_link' === action || 'insert_image' === action || 'advanced_editor' === action ) {
+		// Only open the dialogs if an element in the table editor is focussed, to e.g. prevent multiple dialogs to be opened.
+		if ( $( '#table-editor' ).contains( document.activeElement ) ) { // eslint-disable-line @wordpress/no-global-active-element
+			const $active_textarea = ( 'TEXTAREA' === document.activeElement.tagName ) ? document.activeElement : null; // eslint-disable-line @wordpress/no-global-active-element
+			// Open the "Insert Link", "Insert Image", or Advanced Editor" dialog.
+			tp.callbacks[ action ].open_dialog( $active_textarea );
+		}
+
+		// Prevent the browser's native handling of the shortcut.
+		event.preventDefault();
+	} else if ( 'move' === action ) {
+		// Only move rows or columns if an element in the table editor is focussed, but not if the cell is being edited (to not prevent the browser's original shortcuts).
+		if ( $( '#table-editor' ).contains( document.activeElement ) && 'TEXTAREA' !== document.activeElement.tagName ) { // eslint-disable-line @wordpress/no-global-active-element
+			// Move the selected rows or columns.
+			if ( tp.helpers.move_allowed( move_type, move_direction ) ) {
+				tp.callbacks.move( move_direction, move_type );
+			}
+		}
+
+		// Stop the event propagation so that Jspreadsheet doesn't understand the arrow key as movement of the cursor, and prevent the browser's native handling of the shortcut.
+		event.stopImmediatePropagation();
+	}
+};
+
 /*
  * Initialize Jspreadsheet.
  */
@@ -1164,7 +1413,7 @@ tp.editor = jspreadsheet( $( '#table-editor' ), {
 	columnSorting: true,
 	columnDrag: true,
 	columnResize: true,
-	defaultColWidth: 170,
+	defaultColWidth: tp.screen_options.table_editor_column_width,
 	defaultColAlign: 'left',
 	parseFormulas: false,
 	allowExport: false,
@@ -1206,6 +1455,11 @@ $( '#tablepress-page' ).addEventListener( 'click', ( event ) => {
 		tp.callbacks.save_changes.process( event );
 		return;
 	}
+
+	if ( event.target.matches( '.button-show-help-box' ) ) {
+		tp.callbacks.help_box.open_dialog( event );
+		return;
+	}
 } );
 
 /*
@@ -1236,26 +1490,21 @@ $( '#tablepress-manipulation-controls' ).addEventListener( 'click', ( event ) =>
 		return;
 	}
 
-	if ( event.target.matches( '.button-show-help-box' ) ) {
-		tp.callbacks.help_box.open_dialog( event );
-		return;
-	}
-
 	/*
 	 * Events that do require a selection.
 	 */
 
-	if ( event.target.matches( '#button-insert-link' ) ) {
+	if ( 'button-insert-link' === event.target.id ) {
 		tp.callbacks.insert_link.open_dialog();
 		return;
 	}
 
-	if ( event.target.matches( '#button-insert-image' ) ) {
+	if ( 'button-insert-image' === event.target.id ) {
 		tp.callbacks.insert_image.open_dialog();
 		return;
 	}
 
-	if ( event.target.matches( '#button-advanced-editor' ) ) {
+	if ( 'button-advanced-editor' === event.target.id ) {
 		tp.callbacks.advanced_editor.open_dialog();
 		return;
 	}
@@ -1306,13 +1555,42 @@ const $table_id_field = $( '#table-id' );
 $table_id_field.addEventListener( 'input', tp.callbacks.table_id.sanitize );
 $table_id_field.addEventListener( 'change', tp.callbacks.table_id.change );
 
+// Select Shortcode input field content when it's focussed.
+const $table_information_shortcode = $( '#table-information-shortcode' );
+if ( $table_information_shortcode ) {
+	$table_information_shortcode.addEventListener( 'focus', function() {
+		this.select();
+	} );
+}
+
 // Register callback for inserting a link into a cell after it has been constructed in the wpLink dialog.
 jQuery( '#textarea-insert-helper' ).on( 'change', tp.helpers.editor.insert_from_helper_textarea ); // This must use jQuery, as wpLink triggers jQuery events, which can not be observed by native JS listeners.
 
 // Register change callbacks for the table name, description, and options.
-[ '#table-name', '#table-description' ].forEach( ( $field_id ) => $( $field_id ).addEventListener( 'change', tp.helpers.unsaved_changes.set ) );
+[ '#table-name', '#table-description' ].forEach( ( field_id ) => $( field_id ).addEventListener( 'change', tp.helpers.unsaved_changes.set ) );
 const options_meta_boxes = apply_filters( 'tablepress.optionsMetaBoxes', [ '#tablepress_edit-table-options', '#tablepress_edit-datatables-features' ] );
 options_meta_boxes.forEach( ( meta_box_id ) => $( meta_box_id ).addEventListener( 'change', tp.helpers.options.change ) );
+
+// Move all "Help" buttons inside the postbox header.
+document.querySelectorAll( '#tablepress-body .button-module-help' ).forEach( ( $button ) => ( $button.closest( '.postbox' ).querySelector( '.handle-actions' ).prepend( $button ) ) );
+
+// Register callbacks for the screen options.
+const $tablepress_screen_options = $( '#tablepress-screen-options' );
+$tablepress_screen_options.addEventListener( 'input', tp.callbacks.screen_options.update );
+$tablepress_screen_options.addEventListener( 'change', tp.callbacks.screen_options.set_was_changed );
+$tablepress_screen_options.addEventListener( 'focusout', tp.callbacks.screen_options.save ); // Use the `focusout` event instead of `blur` as that does not bubble.
+
+// Register keyboard shortcut handler.
+window.addEventListener( 'keydown', tp.callbacks.keyboard_shortcuts, true );
+
+// Add keyboard shortcuts as title attributes to "Preview" and "Save Changes" buttons, with correct modifier key for Mac/non-Mac.
+const modifier_key = ( window?.navigator?.platform?.includes( 'Mac' ) ) ?
+	_x( '⌘', 'keyboard shortcut modifier key on a Mac keyboard', 'tablepress' ) :
+	_x( 'Ctrl+', 'keyboard shortcut modifier key on a non-Mac keyboard', 'tablepress' );
+document.querySelectorAll( '.button[data-shortcut]' ).forEach( ( $button ) => {
+	const shortcut = sprintf( $button.dataset.shortcut, modifier_key ); // eslint-disable-line @wordpress/valid-sprintf
+	$button.title = sprintf( __( 'Keyboard Shortcut: %s', 'tablepress' ), shortcut );
+} );
 
 // This code requires jQuery, and it must run when the DOM is ready. Therefore, move it outside of the main function.
 jQuery( function () {

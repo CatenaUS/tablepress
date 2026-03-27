@@ -40,6 +40,8 @@ class TablePress_About_View extends TablePress_View {
 	public function setup( $action, array $data ) {
 		parent::setup( $action, $data );
 
+		$this->add_text_box( 'spacer', array( $this, 'textbox_spacer' ), 'normal' );
+		$this->add_text_box( 'spacer', array( $this, 'textbox_spacer' ), 'side' );
 		$this->add_meta_box( 'plugin-purpose', __( 'Plugin Purpose', 'tablepress' ), array( $this, 'postbox_plugin_purpose' ), 'normal' );
 		$this->add_meta_box( 'usage', __( 'Usage', 'tablepress' ), array( $this, 'postbox_usage' ), 'normal' );
 		$this->add_meta_box( 'more-information', __( 'More Information and Documentation', 'tablepress' ), array( $this, 'postbox_more_information' ), 'normal' );
@@ -47,6 +49,20 @@ class TablePress_About_View extends TablePress_View {
 		$this->add_meta_box( 'author-license', __( 'Author and License', 'tablepress' ), array( $this, 'postbox_author_license' ), 'side' );
 		$this->add_meta_box( 'credits-thanks', __( 'Credits and Thanks', 'tablepress' ), array( $this, 'postbox_credits_thanks' ), 'side' );
 		$this->add_meta_box( 'debug-version-information', __( 'Debug and Version Information', 'tablepress' ), array( $this, 'postbox_debug_version_information' ), 'side' );
+	}
+
+	/**
+	 * Prints the screen head spacer.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param array $data Data for this screen.
+	 * @param array $box  Information about the text box.
+	 */
+	public function textbox_spacer( array $data, array $box ) {
+		?>
+		<p></p>
+		<?php
 	}
 
 	/**
@@ -87,7 +103,16 @@ class TablePress_About_View extends TablePress_View {
 		<?php _e( 'Those will ask you for the necessary information and corresponding HTML code will be added to the cell automatically.', 'tablepress' ); ?>
 	</p>
 	<p>
-		<?php printf( __( 'To insert a table into a post or page, add a “%1$s” block in the block editor and select the desired table.', 'tablepress' ), __( 'TablePress table', 'tablepress' ) ); ?>
+		<?php
+		// Show the instructions string depending on whether the Block Editor is used on the site or not.
+		if ( $data['site_uses_block_editor'] ) {
+			printf( __( 'To insert a table into a post or page, add a “%1$s” block in the block editor and select the desired table.', 'tablepress' ), __( 'TablePress table', 'tablepress' ) );
+		} else {
+			_e( 'To insert a table into a post or page, paste its Shortcode at the desired place in the editor.', 'tablepress' );
+			echo ' ';
+			_e( 'Each table has a unique ID that needs to be adjusted in that Shortcode.', 'tablepress' );
+		}
+		?>
 	</p>
 	<p>
 		<?php _e( 'Tables can be styled by changing and adding CSS commands.', 'tablepress' ); ?>
@@ -131,16 +156,12 @@ class TablePress_About_View extends TablePress_View {
 		<?php _e( 'It is licensed as Free Software under GNU General Public License 2 (GPL 2).', 'tablepress' ); ?>
 	</p>
 	<p>
-		<?php
-		if ( tb_tp_fs()->is_free_plan() ) {
-			printf( __( 'If you like the plugin, <a href="%s"><strong>giving a donation</strong></a> is recommended.', 'tablepress' ), 'https://tablepress.org/donate/' );
-		}
-		?>
 		<?php printf( __( 'Please rate and review the plugin in the <a href="%s">WordPress Plugin Directory</a>.', 'tablepress' ), 'https://wordpress.org/support/view/plugin-reviews/tablepress' ); ?>
 	</p>
 		<?php
 		if ( tb_tp_fs()->is_free_plan() ) {
-			echo '<p>' . __( 'Donations and good ratings allow me to further develop the plugin. Any amount is appreciated! Thanks!', 'tablepress' ) . '</p>';
+			echo '<p><strong>' . sprintf( __( 'I would like to invite you to check out the <a href="%s">Premium versions of TablePress</a>.', 'tablepress' ), 'https://tablepress.org/premium/' ) . ' '
+			. __( 'The available Pro and Max plans offer user support and many exciting and helpful features for your tables.', 'tablepress' ) . '</strong></p>';
 		}
 		?>
 		<?php
@@ -157,6 +178,12 @@ class TablePress_About_View extends TablePress_View {
 	public function postbox_help_support( array $data, array $box ) {
 		if ( tb_tp_fs()->is_free_plan() ) {
 			?>
+		<h4><?php _e( 'Premium Support', 'tablepress' ); ?></h4>
+		<p>
+			<?php _e( 'Users with a valid TablePress Premium license plan are eligible for Priority Email Support, directly from the plugin developer!', 'tablepress' ); ?>
+			<strong><?php printf( __( '<a href="%s">Find out more!</a>', 'tablepress' ), 'https://tablepress.org/premium/' ); ?></strong>
+		</p>
+		<h4><?php _e( 'Community Support for users of the Free version', 'tablepress' ); ?></h4>
 		<p>
 			<?php printf( __( '<a href="%1$s">Support</a> is provided through the <a href="%2$s">WordPress Support Forums</a>.', 'tablepress' ), 'https://tablepress.org/support/', 'https://wordpress.org/support/plugin/tablepress' ); ?>
 			<?php printf( __( 'Before asking for support, please carefully read the <a href="%s">Frequently Asked Questions</a>, where you will find answers to the most common questions, and search through the forums.', 'tablepress' ), 'https://tablepress.org/faq/' ); ?>
@@ -185,7 +212,7 @@ class TablePress_About_View extends TablePress_View {
 			<br />&middot; TablePress: <?php echo TablePress::version; ?>
 			<br />&middot; TablePress (DB): <?php echo TablePress::db_version; ?>
 			<br />&middot; TablePress table scheme: <?php echo TablePress::table_scheme_version; ?>
-			<br />&middot; Plan: Free
+			<br />&middot; Plan: <?php echo tb_tp_fs()->is_plan_or_trial( 'pro', true ) ? 'Pro' : ( tb_tp_fs()->is_plan_or_trial( 'max', true ) ? 'Max' : 'Free' ); ?>
 			<br />&middot; Plugin installed: <?php echo wp_date( 'Y/m/d H:i:s', $data['first_activation'] ); ?>
 			<br />&middot; WordPress: <?php echo $GLOBALS['wp_version']; ?>
 			<br />&middot; Multisite: <?php echo is_multisite() ? 'yes' : 'no'; ?>
@@ -220,15 +247,6 @@ class TablePress_About_View extends TablePress_View {
 			<br />&middot; <?php _e( 'all customers, donors, contributors, supporters, reviewers, and users of the plugin!', 'tablepress' ); ?>
 		</p>
 		<?php
-		if ( tb_tp_fs()->is_free_plan() ) {
-			?>
-		<hr />
-		<p>
-			<a href="https://wpactivitylog.com/?utm_source=tablepress&utm_medium=referral&utm_campaign=WSAL" target="_blank" rel="noopener"><img src="<?php echo plugins_url( 'admin/img/wsal-logo.png', TABLEPRESS__FILE__ ); ?>" alt="<?php printf( esc_attr_x( 'This release of TablePress is supported by %s, the most comprehensive WordPress activity logs plugin.', 'WP Activity Log', 'tablepress' ), 'WP Activity Log' ); ?>" style="width:100%;height:auto;max-width:320px;display:block;margin:0 auto" /></a>
-			<?php printf( _x( 'This release of TablePress is supported by %s, the most comprehensive WordPress activity logs plugin.', 'WP Activity Log', 'tablepress' ), '<a href="https://wpactivitylog.com/?utm_source=tablepress&utm_medium=referral&utm_campaign=WSAL" target="_blank" rel="noopener">WP Activity Log</a>' ); ?>
-		</p>
-			<?php
-		} // if
 	}
 
 } // class TablePress_About_View

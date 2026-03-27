@@ -88,7 +88,7 @@ export default function TablePressTableEdit( { attributes, setAttributes } ) {
 					instructions={
 						<>
 							{ /* Show an error message if a table could not be found (e.g. after a table was deleted).
-							     The tp.tables.hasOwnProperty( attributes.id ) check happens above.*/ }
+							     The tp.tables.hasOwnProperty( attributes.id ) check happens above. */ }
 							{ attributes.id && sprintf( __( 'There is a problem: The TablePress table with the ID “%1$s” could not be found.', 'tablepress' ), attributes.id ) + ' ' }
 
 							{ 0 < ComboboxControl_options.length ? __( 'Select the TablePress table that you want to embed in the Settings sidebar.', 'tablepress' ) : __( 'There are no TablePress tables on this site yet.', 'tablepress' ) }
@@ -150,6 +150,11 @@ export default function TablePressTableEdit( { attributes, setAttributes } ) {
 									return ' ' + shortcode_attrs_to_string( shortcodeAttrs ) + ' '; // Add spaces around replacement text to have separation to possibly already existing parameters.
 								}
 							);
+							parameters = parameters.replace( /=“([^”]*)”/g, '="$1"' ); // Replace curly quotation marks around a value with normal ones.
+							setAttributes( { parameters } );
+						} }
+						onBlur={ ( event ) => {
+							const parameters = event.target.value.trim(); // Remove leading and trailing whitespace from the parameter string.
 							setAttributes( { parameters } );
 						} }
 					/>

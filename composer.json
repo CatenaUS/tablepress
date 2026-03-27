@@ -1,5 +1,5 @@
 {
-	"name": "tablepress/tablepress",
+	"name": "catenaus/tablepress",
 	"description": "TablePress plugin for WordPress",
 	"type": "wordpress-plugin",
 	"keywords": ["wordpress", "plugin", "table"],

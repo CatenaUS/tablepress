@@ -2,51 +2,64 @@
 
 namespace TablePress\PhpOffice\PhpSpreadsheet\Shared\Escher;
 
+use TablePress\PhpOffice\PhpSpreadsheet\Exception as SpreadsheetException;
+
 class DgContainer
 {
-    /**
-     * Drawing index, 1-based.
-     *
-     * @var int
-     */
-    private $dgId;
+	/**
+	 * Drawing index, 1-based.
+	 *
+	 * @var ?int
+	 */
+	private $dgId;
 
-    /**
-     * Last shape index in this drawing.
-     *
-     * @var int
-     */
-    private $lastSpId;
+	/**
+	 * Last shape index in this drawing.
+	 *
+	 * @var ?int
+	 */
+	private $lastSpId;
 
-    private $spgrContainer;
+	/** @var ?DgContainer\SpgrContainer */
+	private $spgrContainer;
 
-    public function getDgId()
-    {
-        return $this->dgId;
-    }
+	public function getDgId(): ?int
+	{
+		return $this->dgId;
+	}
 
-    public function setDgId($value): void
-    {
-        $this->dgId = $value;
-    }
+	public function setDgId(int $value): void
+	{
+		$this->dgId = $value;
+	}
 
-    public function getLastSpId()
-    {
-        return $this->lastSpId;
-    }
+	public function getLastSpId(): ?int
+	{
+		return $this->lastSpId;
+	}
 
-    public function setLastSpId($value): void
-    {
-        $this->lastSpId = $value;
-    }
+	public function setLastSpId(int $value): void
+	{
+		$this->lastSpId = $value;
+	}
 
-    public function getSpgrContainer()
-    {
-        return $this->spgrContainer;
-    }
+	public function getSpgrContainer(): ?DgContainer\SpgrContainer
+	{
+		return $this->spgrContainer;
+	}
 
-    public function setSpgrContainer($spgrContainer)
-    {
-        return $this->spgrContainer = $spgrContainer;
-    }
+	public function getSpgrContainerOrThrow(): DgContainer\SpgrContainer
+	{
+		if ($this->spgrContainer !== null) {
+			return $this->spgrContainer;
+		}
+
+		throw new SpreadsheetException('spgrContainer is unexpectedly null');
+	}
+
+	/** @param DgContainer\SpgrContainer $spgrContainer */
+	public function setSpgrContainer($spgrContainer): DgContainer\SpgrContainer
+	{
+		return $this->spgrContainer = $spgrContainer;
+	}
 }
